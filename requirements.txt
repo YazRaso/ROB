@@ -1,0 +1,27 @@
+# Core dependencies
+fastapi==0.128.0
+uvicorn==0.40.0
+python-dotenv==1.2.1
+httpx==0.28.1
+
+# Database
+# Using SQLite (built-in)
+
+# Encryption
+cryptography==46.0.3
+
+# Backboard SDK
+backboard-sdk==1.4.6
+
+# Google Drive API
+google-api-python-client==2.149.0
+google-auth-httplib2==0.2.0
+google-auth-oauthlib==1.2.1
+google-auth==2.36.0
+
+# Telegram Bot (optional - for future integration)
+python-telegram-bot==22.5
+
+# Development dependencies
+pytest==8.3.4
+pytest-asyncio==0.25.2
