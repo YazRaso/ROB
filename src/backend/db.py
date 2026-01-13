@@ -64,6 +64,15 @@ cur.execute(
 )
 
 
+cur.execute(
+    """
+    CREATE TABLE IF NOT EXISTS repositories (
+        repo_url TEXT PRIMARY KEY,
+        client_id TEXT
+    )
+"""
+)
+
 def get_connection():
     con = sqlite3.connect(DB_NAME)
     con.row_factory = sqlite3.Row
@@ -228,3 +237,33 @@ def get_all_drive_documents_for_client(client_id: str):
     docs = cur.fetchall()
     con.close()
     return [dict(doc) for doc in docs] if docs else []
+
+
+# Repo Functions 
+
+def add_repository(repo_url: str, client_id: str):
+    con = get_connection()
+    con.row_factory = sqlite3.Row
+    cur = con.cursor()
+    cur.execute(
+        """
+        INSERT INTO repositories (repo_url, client_id) VALUES (?, ?)
+    """,
+        (repo_url, client_id),
+    )
+    con.commit()
+    con.close()
+
+def lookup_repository(repo_url: str):
+    con = get_connection()
+    con.row_factory = sqlite3.Row
+    cur = con.cursor()
+    cur.execute(
+        """
+        SELECT * FROM repositories WHERE repo_url = ?
+    """,
+        (repo_url,),
+    )
+    repo = cur.fetchone()
+    con.close()
+    return dict(repo) if repo else None

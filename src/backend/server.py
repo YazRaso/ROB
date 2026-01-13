@@ -243,3 +243,38 @@ async def get_drive_documents(client_id: str):
         "document_count": len(documents),
         "documents": documents,
     }
+
+
+# Git related endpoints
+
+@app.post("/git/register")
+async def register_repository(client_id: str, repo_url: str, status_code=201):
+    """
+    Register a Git repository for tracking.
+
+    Args:
+        client_id: The client ID
+        repo_url: Git repository URL
+    """
+    
+    # Check client
+    client = db.lookup_client(client_id)
+    if not client:
+        raise HTTPException(status_code=404, detail="Client does not exist")
+
+    # Check repository
+    repository = db.lookup_repository(repo_url)
+    if repository:
+        raise HTTPException(status_code=409, detail="Repository already registered")
+
+    # Add repository
+    db.add_repository(repo_url, client_id)
+
+    return {
+        "status": "registered",
+        "repo_url": repo_url,
+        "client_id": client_id,
+    }
+
+@app.get("/git/ingest")
+
