@@ -1,6 +1,7 @@
 """Helper functions for ingesting content from Git repositories via GitHub API"""
 
 import requests
+from urllib.parse import urlparse
 
 GITHUB_API_BASE = "https://api.github.com"
 
@@ -39,12 +40,16 @@ def parse_github_url(repo_url: str) -> tuple[str, str]:
     
     'https://github.com/owner/repo' -> ('owner', 'repo')
     """
-
-    url_split = repo_url.rstrip("/").split("/")
-    if len(url_split) < 2:
+    parsed = urlparse(repo_url.rstrip("/"))
+    if parsed.netloc not in ("github.com", "www.github.com"):
+        raise ValueError("URL must be a GitHub repository URL")
+    
+    path_parts = parsed.path.strip("/").split("/")
+    if len(path_parts) < 2:
         raise ValueError("Invalid GitHub URL")
-    return url_split[-2], url_split[-1]
+    return path_parts[0], path_parts[1]
 
+REQUEST_TIMEOUT = 30  # seconds
 
 def fetch_repo_contents(owner: str, repo: str, path: str = "") -> list:
     """Fetch list of files/folders at a given path in the repo.
@@ -53,12 +58,12 @@ def fetch_repo_contents(owner: str, repo: str, path: str = "") -> list:
     """
 
     url = f"{GITHUB_API_BASE}/repos/{owner}/{repo}/contents/{path}"
-    response = requests.get(url)
+    response = requests.get(url, timeout=REQUEST_TIMEOUT)
     response.raise_for_status()
     return response.json()
 
 
-def fetch_file_content(download_url: str) -> str:
+def fetch_file_content(download_url: str):
     """Download the raw content of a single file."""
 
     if not download_url:

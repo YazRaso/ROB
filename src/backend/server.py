@@ -285,22 +285,37 @@ async def ingest_repository(client_id: str, repo_url: str, status_code=201):
     if not client:
         raise HTTPException(status_code=404, detail="Client does not exist")
 
-    owner, repo = parse_github_url(repo_url)
+    try:
+        owner, repo = parse_github_url(repo_url)
+    except (ValueError, TypeError) as e:
+        raise HTTPException(status_code=400, detail=f"Invalid GitHub URL: {repo_url}")
+    
+    if not owner or not repo:
+        raise HTTPException(status_code=400, detail=f"Could not parse owner/repo from URL: {repo_url}")
 
     good_files = []
 
-    def process(path: str):
-        items = fetch_repo_contents(owner, repo, path)
+    def process(path: str, depth: int = 0):
+        if depth > 50:
+            print(f"Max depth reached at {path}, skipping")
+            return
+        try:
+            items = fetch_repo_contents(owner, repo, path)
+        except Exception as e:
+            print(f"Error fetching contents at {path}: {e}")
+            return
         for item in items:
             if item["type"] == "dir":
                 if not should_skip_directory(item["name"]):
-                    process(item["path"]) # Recurse into subdirectory
+                    process(item["path"], depth + 1)
             elif item["type"] == "file":
                 if should_ingest_file(item["name"]):
-                    content = fetch_file_content(item["download_url"])
-                    if content: 
-                        print(f"Ingesting file: {item['name']}")
-                        good_files.append((item["path"], content))
+                    try:
+                        content = fetch_file_content(item["download_url"])
+                        if content:
+                            good_files.append((item["path"], content))
+                    except Exception as e:
+                        print(f"Error fetching file {item['name']}: {e}")
 
     process("")
 
@@ -313,7 +328,7 @@ async def ingest_repository(client_id: str, repo_url: str, status_code=201):
         )
     assistant_id = assistant["assistant_id"]
     thread = await backboard_client.create_thread(assistant_id)
-    output = []
+    
     for file_path, file_content in good_files: 
         async for chunk in await backboard_client.add_message(
             thread_id=thread.thread_id,
@@ -321,8 +336,7 @@ async def ingest_repository(client_id: str, repo_url: str, status_code=201):
             memory="Auto",
             stream=True,
         ):
-            if chunk["type"] == "content_streaming":
-                output.append(chunk["content"])
+            pass
 
     return {
         "status": "completed",
