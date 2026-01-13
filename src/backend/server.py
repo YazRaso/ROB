@@ -35,7 +35,7 @@ async def create_client(client_id: str, api_key: str, status_code=201):
     # Create entry for new client
     db.create_client(client_id, encrypted_api_key)
     # Connect to backboard
-    backboard_client = BackboardClient(api_key=decrypted_api_key)
+    backboard_client = BackboardClient(api_key=api_key)
     # Create assistant
     assistant = await backboard_client.create_assistant(
         name="Test Assistant",
@@ -43,6 +43,12 @@ async def create_client(client_id: str, api_key: str, status_code=201):
     )
     # Create entry for new assistant
     db.create_assistant(assistant.assistant_id, client_id)
+
+    return {
+        "status": "created",
+        "client_id": client_id,
+        "assistant_id": assistant.assistant_id,
+    }
 
 
 # add_thread uses client_ids assistant and prompts backboard with content
@@ -55,6 +61,10 @@ async def add_thread(client_id: str, content: str, status_code=201):
     decrypted_api_key = encryption.decrypt_api_key(client["api_key"])
     backboard_client = BackboardClient(api_key=decrypted_api_key)
     assistant = db.lookup_assistant(client_id)
+    if not assistant:
+        raise HTTPException(
+            status_code=404, detail="No assistant found for this client!"
+        )
     assistant_id = assistant["assistant_id"]
     thread = await backboard_client.create_thread(assistant_id)
     output = []

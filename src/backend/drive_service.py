@@ -47,8 +47,18 @@ class DriveService:
             credentials_path: Path to Google OAuth2 credentials file
             token_path: Path to store/load authentication token
         """
-        self.credentials_path = credentials_path
-        self.token_path = token_path
+        # Use absolute paths relative to this file's directory
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        if not os.path.isabs(credentials_path):
+            self.credentials_path = os.path.join(current_dir, credentials_path)
+        else:
+            self.credentials_path = credentials_path
+
+        if not os.path.isabs(token_path):
+            self.token_path = os.path.join(current_dir, token_path)
+        else:
+            self.token_path = token_path
+
         self.service = None
         self.creds = None
 
@@ -196,39 +206,65 @@ class DriveService:
 
             assistant_id = assistant["assistant_id"]
 
-            # Create thread and send content to Backboard memory
-            thread = await backboard_client.create_thread(assistant_id)
+            # Create a temporary text file with the content
+            import tempfile
 
-            # Format content with context
-            formatted_content = f"""
-Meeting Notes from: {metadata['name']}
+            temp_file_path = None
+            try:
+                # Create temporary file with document content
+                with tempfile.NamedTemporaryFile(
+                    mode="w", suffix=".txt", delete=False, encoding="utf-8"
+                ) as temp_file:
+                    # Write content with metadata header
+                    header = f"""Document: {metadata['name']}
 Last Modified: {metadata['modifiedTime']}
+Source: Google Drive
 Link: {metadata.get('webViewLink', 'N/A')}
 
-Content:
-{content}
+{'='*60}
 
-Please remember this information for future queries about onboarding, meetings, and project context.
 """
+                    temp_file.write(header + content)
+                    temp_file_path = temp_file.name
 
-            # Send to Backboard with memory enabled
-            output = []
-            async for chunk in await backboard_client.add_message(
-                thread_id=thread.thread_id,
-                content=formatted_content,
-                memory="Auto",  # Enable automatic memory storage
-                stream=True,
-            ):
-                if chunk["type"] == "content_streaming":
-                    output.append(chunk["content"])
+                # Upload document to assistant
+                print(f"Uploading {metadata['name']} to Backboard...")
+                document = await backboard_client.upload_document_to_assistant(
+                    assistant_id, temp_file_path
+                )
 
-            response = "".join(output)
-            print(f"Successfully sent to Backboard: {metadata['name']}")
+                # Wait for document to be indexed
+                print(f"Waiting for document to be indexed...")
+                max_wait_time = 60  # Maximum 60 seconds
+                start_time = time.time()
+
+                while time.time() - start_time < max_wait_time:
+                    status = await backboard_client.get_document_status(
+                        document.document_id
+                    )
+                    if status.status == "indexed":
+                        print(f"✅ Document indexed successfully: {metadata['name']}")
+                        break
+                    elif status.status == "failed":
+                        print(f"❌ Document indexing failed: {status.status_message}")
+                        return
+                    await asyncio.sleep(2)
+                else:
+                    print(f"⚠️  Document indexing timeout for {metadata['name']}")
+
+            finally:
+                # Clean up temporary file
+                if temp_file_path and os.path.exists(temp_file_path):
+                    os.remove(temp_file_path)
+
+            print(f"Successfully uploaded to Backboard: {metadata['name']}")
 
             # Update or create database entry
             if existing_doc:
+                print(f"Updating existing document in DB: {file_id}")
                 db.update_drive_document(file_id, content_hash, content)
             else:
+                print(f"Creating new document in DB: {file_id} for client {client_id}")
                 db.create_drive_document(
                     file_id=file_id,
                     client_id=client_id,
@@ -237,9 +273,13 @@ Please remember this information for future queries about onboarding, meetings, 
                     last_modified=metadata["modifiedTime"],
                     content=content,
                 )
+            print(f"Document saved to database: {file_id}")
 
         except Exception as e:
-            print(f"Error sending to Backboard: {e}")
+            print(f"Error processing document: {e}")
+            import traceback
+
+            traceback.print_exc()
 
     async def poll_documents(
         self, file_ids: List[str], client_id: str, interval: int = 300
