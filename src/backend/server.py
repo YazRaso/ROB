@@ -12,6 +12,7 @@ from fastapi import FastAPI, HTTPException
 import encryption
 import db
 from drive_service import DriveService, extract_file_id_from_url
+from git_service import parse_github_url, fetch_repo_contents, fetch_file_content, should_ingest_file, should_skip_directory
 
 app = FastAPI()
 drive_service = None  # Will be initialized when needed
@@ -276,5 +277,56 @@ async def register_repository(client_id: str, repo_url: str, status_code=201):
         "client_id": client_id,
     }
 
-@app.get("/git/ingest")
+@app.post("/git/ingest")
+async def ingest_repository(client_id: str, repo_url: str, status_code=201):
 
+    # Check client
+    client = db.lookup_client(client_id)
+    if not client:
+        raise HTTPException(status_code=404, detail="Client does not exist")
+
+    owner, repo = parse_github_url(repo_url)
+
+    good_files = []
+
+    def process(path: str):
+        items = fetch_repo_contents(owner, repo, path)
+        for item in items:
+            if item["type"] == "dir":
+                if not should_skip_directory(item["name"]):
+                    process(item["path"]) # Recurse into subdirectory
+            elif item["type"] == "file":
+                if should_ingest_file(item["name"]):
+                    content = fetch_file_content(item["download_url"])
+                    if content: 
+                        print(f"Ingesting file: {item['name']}")
+                        good_files.append((item["path"], content))
+
+    process("")
+
+    decrypted_api_key = encryption.decrypt_api_key(client["api_key"])
+    backboard_client = BackboardClient(api_key=decrypted_api_key)
+    assistant = db.lookup_assistant(client_id)
+    if not assistant:
+        raise HTTPException(
+            status_code=404, detail="No assistant found for this client!"
+        )
+    assistant_id = assistant["assistant_id"]
+    thread = await backboard_client.create_thread(assistant_id)
+    output = []
+    for file_path, file_content in good_files: 
+        async for chunk in await backboard_client.add_message(
+            thread_id=thread.thread_id,
+            content=f"File: {file_path}\n\n{file_content}",
+            memory="Auto",
+            stream=True,
+        ):
+            if chunk["type"] == "content_streaming":
+                output.append(chunk["content"])
+
+    return {
+        "status": "completed",
+        "repo_url": repo_url,
+        "client_id": client_id,
+        "files_ingested": len(good_files),
+    }
