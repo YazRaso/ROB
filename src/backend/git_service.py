@@ -86,3 +86,4 @@ def should_ingest_file(filename: str) -> bool:
 def should_skip_directory(dir_name: str) -> bool:
     """Return True if this directory should be skipped."""
     return dir_name in SKIP_DIRECTORIES
+
