@@ -47,16 +47,16 @@ export class BackboardService {
             return this.handleSourceRequest(message);
         }
 
-        // Check for tool invocations
-        if (message.includes('@create_file') || message.includes('@"create_file"')) {
+        // Check for tool invocations (no quotes required)
+        if (message.includes('@create_file')) {
             return this.handleCreateFileRequest(message);
         }
 
-        if (message.includes('@get_recent_context') || message.includes('@"get_recent_context"')) {
+        if (message.includes('@get_recent_context')) {
             return this.handleGetRecentContextRequest(message);
         }
 
-        if (message.includes('@generate_mermaid_graph') || message.includes('@"generate_mermaid_graph"')) {
+        if (message.includes('@generate_mermaid_graph')) {
             return this.handleGenerateMermaidGraphRequest(message);
         }
 

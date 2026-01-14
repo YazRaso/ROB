@@ -15,7 +15,7 @@ import encryption
 import db
 from drive_service import DriveService, extract_file_id_from_url
 from git_service import parse_github_url, fetch_repo_contents, fetch_file_content, should_ingest_file, should_skip_directory
-from tools import detect_tool_invocation, execute_tool, handle_create_file, handle_get_recent_context, handle_generate_mermaid_graph
+from tools import detect_tool_invocation, execute_tool, handle_create_file, handle_get_recent_context, handle_generate_mermaid_graph, get_all_tool_prompts
 
 app = FastAPI()
 
@@ -579,6 +579,35 @@ async def create_file_tool(
     if not client:
         raise HTTPException(status_code=404, detail="Client does not exist!")
     
+    # Validate and sanitize filename to prevent path traversal
+    if not filename or not filename.strip():
+        raise HTTPException(status_code=400, detail="Filename cannot be empty")
+    
+    # Normalize the path
+    normalized_path = os.path.normpath(filename)
+    
+    # Reject absolute paths
+    if os.path.isabs(normalized_path):
+        raise HTTPException(status_code=400, detail="Absolute paths are not allowed")
+    
+    # Reject paths containing '..' (path traversal)
+    if '..' in normalized_path.split(os.sep):
+        raise HTTPException(status_code=400, detail="Path traversal (..) is not allowed")
+    
+    # Reject paths with path separators outside allowed patterns
+    # Allow forward slashes for cross-platform compatibility, but validate segments
+    segments = normalized_path.replace('\\', '/').split('/')
+    for segment in segments:
+        if segment in ('..', '.') or os.sep in segment or (os.altsep and os.altsep in segment):
+            raise HTTPException(status_code=400, detail="Invalid path segment")
+    
+    # Limit filename length
+    if len(normalized_path) > 255:
+        raise HTTPException(status_code=400, detail="Filename too long (max 255 characters)")
+    
+    # Use the sanitized filename
+    sanitized_filename = normalized_path.replace('\\', '/')  # Normalize to forward slashes
+    
     decrypted_api_key = encryption.decrypt_api_key(client["api_key"])
     backboard_client = BackboardClient(api_key=decrypted_api_key)
     assistant = db.lookup_assistant(client_id)
@@ -586,7 +615,7 @@ async def create_file_tool(
         raise HTTPException(status_code=404, detail="No assistant found!")
     
     result = await handle_create_file(
-        client_id, filename, content, backboard_client, assistant["assistant_id"]
+        client_id, sanitized_filename, backboard_client, assistant["assistant_id"], user_query=content
     )
     
     return result
@@ -613,7 +642,7 @@ async def get_recent_context_tool(
         raise HTTPException(status_code=404, detail="No assistant found!")
     
     result = await handle_get_recent_context(
-        client_id, hours, backboard_client, assistant["assistant_id"]
+        client_id, backboard_client, assistant["assistant_id"], hours
     )
     
     return result
@@ -644,3 +673,13 @@ async def generate_mermaid_graph_tool(
     )
     
     return result
+
+
+@app.get("/tools/definitions")
+async def get_tool_definitions():
+    """
+    Get all tool system prompts/definitions for Backboard.
+    """
+    return {
+        "tools": get_all_tool_prompts()
+    }

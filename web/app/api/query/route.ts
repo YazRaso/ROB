@@ -12,7 +12,7 @@ export async function POST(request: Request) {
     }
 
     // Check for tool invocations
-    const toolPattern = /@["']?(\w+)["']?/
+    const toolPattern = /@(\w+)/
     const toolMatch = prompt?.match(toolPattern)
     
     if (toolMatch) {
@@ -40,11 +40,12 @@ export async function POST(request: Request) {
       if (toolResult.type === 'tool_result') {
         if (toolResult.tool === 'create_file') {
           // For web, we return the file info and let the frontend handle creation
+          const filename = toolResult.result?.filename ?? '<unknown filename>';
           return NextResponse.json({
             type: 'tool_result',
             tool: 'create_file',
             result: toolResult.result,
-            reply: `File creation request: ${toolResult.result.filename}`,
+            reply: `File creation request: ${filename}`,
             timestamp: new Date().toISOString(),
           })
         }
@@ -53,7 +54,7 @@ export async function POST(request: Request) {
           type: 'tool_result',
           tool: toolResult.tool,
           result: toolResult.result,
-          reply: toolResult.result.formatted || toolResult.result.message || 'Tool executed successfully',
+          reply: toolResult.result?.formatted || toolResult.result?.message || 'Tool executed successfully',
           timestamp: new Date().toISOString(),
         })
       }

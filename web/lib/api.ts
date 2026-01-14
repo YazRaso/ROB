@@ -15,7 +15,7 @@ export const API = {
 
     async query(prompt: string, clientId: string = "default_user") {
         // Check for tool invocations and use API route if found
-        const toolPattern = /@["']?(\w+)["']?/;
+        const toolPattern = /@(\w+)/;
         if (toolPattern.test(prompt)) {
             // Use Next.js API route for tool handling
             const res = await fetch("/api/query", {
