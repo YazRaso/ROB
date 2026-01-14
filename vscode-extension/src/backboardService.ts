@@ -6,6 +6,7 @@ export interface ChatMessage {
     content: string;
     timestamp: number;
     sources?: SourceFile[];
+    context?: FileContext;
 }
 
 export interface SourceFile {
@@ -13,6 +14,12 @@ export interface SourceFile {
     lineStart?: number;
     lineEnd?: number;
     content?: string;
+}
+
+export interface FileContext {
+    fileName: string;
+    filePath: string;
+    content: string;
 }
 
 export class BackboardService {
@@ -33,18 +40,22 @@ export class BackboardService {
         });
     }
 
-    async sendMessage(message: string): Promise<ChatMessage> {
+    async sendMessage(message: string, context?: FileContext): Promise<ChatMessage> {
         if (message.includes('@source')) {
             return this.handleSourceRequest(message);
         }
 
-        return this.getMockResponse(message);
+        return this.getMockResponse(message, context);
     }
 
-    private async getMockResponse(message: string): Promise<ChatMessage> {
+    private async getMockResponse(message: string, context?: FileContext): Promise<ChatMessage> {
         await new Promise(resolve => setTimeout(resolve, 1000));
 
         let response = '';
+        
+        if (context) {
+            response = `I can see you've attached **${context.fileName}** (${Math.round(context.content.length / 1024)}KB).\n\n`;
+        }
         
         if (message.toLowerCase().includes('meeting') || message.toLowerCase().includes('notes')) {
             response = `Based on the meeting notes from Google Drive, I found several important discussions:

@@ -1,9 +1,10 @@
 import * as vscode from "vscode";
-import { BackboardService, ChatMessage } from "./backboardService";
+import { BackboardService, ChatMessage, FileContext } from "./backboardService";
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
   private _view?: vscode.WebviewView;
   private messages: ChatMessage[] = [];
+  private currentContext: FileContext | null = null;
 
   constructor(
     private readonly _extensionUri: vscode.Uri,
@@ -35,6 +36,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         case "webviewReady":
           this.sendWelcomeMessage();
           break;
+        case "attachFile":
+          this.attachCurrentFile();
+          break;
+        case "removeContext":
+          this.removeContext();
+          break;
       }
     });
 
@@ -50,6 +57,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       role: "user",
       content: message,
       timestamp: Date.now(),
+      context: this.currentContext || undefined,
     };
 
     this.messages.push(userMessage);
@@ -58,13 +66,18 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       message: userMessage,
     });
 
-    console.log("Showing typing indicator");
+    if (this.currentContext) {
+      this.currentContext = null;
+      this._view?.webview.postMessage({ type: "contextRemoved" });
+    }
+
     this._view?.webview.postMessage({ type: "showTyping" });
 
     try {
-      console.log("Getting response from backboard service");
-      const response = await this.backboardService.sendMessage(message);
-      console.log("Got response:", response);
+      const response = await this.backboardService.sendMessage(
+        message,
+        userMessage.context
+      );
       this.messages.push(response);
       this._view?.webview.postMessage({ type: "hideTyping" });
       this._view?.webview.postMessage({
@@ -72,7 +85,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         message: response,
       });
     } catch (error) {
-      console.error("Error getting response:", error);
       this._view?.webview.postMessage({ type: "hideTyping" });
       const errorMessage: ChatMessage = {
         role: "assistant",
@@ -131,6 +143,33 @@ How can I help you today?`,
     this._view?.webview.postMessage({ type: "clearChat" });
     this.sendWelcomeMessage();
     vscode.window.showInformationMessage("Chat history cleared!");
+  }
+
+  private attachCurrentFile() {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) {
+      vscode.window.showInformationMessage("No file is currently open");
+      return;
+    }
+
+    const document = editor.document;
+    const fileName = vscode.workspace.asRelativePath(document.uri);
+    
+    this.currentContext = {
+      fileName: fileName,
+      filePath: document.uri.fsPath,
+      content: document.getText(),
+    };
+
+    this._view?.webview.postMessage({
+      type: "fileAttached",
+      context: this.currentContext,
+    });
+  }
+
+  private removeContext() {
+    this.currentContext = null;
+    this._view?.webview.postMessage({ type: "contextRemoved" });
   }
 
   private openFileAtLine(filePath: string, line?: number) {
@@ -433,6 +472,72 @@ How can I help you today?`,
             height: 16px;
         }
 
+        #attach-file-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            background: transparent;
+            color: var(--vscode-icon-foreground);
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            flex-shrink: 0;
+        }
+
+        #attach-file-btn:hover {
+            background-color: var(--vscode-toolbar-hoverBackground);
+        }
+
+        #attach-file-btn svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        #attached-file {
+            padding: 8px 16px;
+            border-top: 1px solid var(--vscode-panel-border);
+        }
+
+        .attached-file-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 8px;
+            background-color: var(--vscode-badge-background);
+            color: var(--vscode-badge-foreground);
+            border-radius: 4px;
+            font-size: 12px;
+        }
+
+        .file-icon {
+            font-size: 14px;
+        }
+
+        #remove-file-btn {
+            width: 18px;
+            height: 18px;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: transparent;
+            color: inherit;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 700;
+            transition: all 0.15s ease;
+        }
+
+        #remove-file-btn:hover {
+            background-color: var(--vscode-errorForeground);
+            color: white;
+        }
+
         .shortcut-hint {
             font-size: 10px;
             opacity: 0.5;
@@ -464,7 +569,19 @@ How can I help you today?`,
         <div class="typing-dot"></div>
         <div class="typing-dot"></div>
     </div>
+    <div id="attached-file" style="display: none;">
+        <div class="attached-file-badge">
+            <span class="file-icon">📄</span>
+            <span id="attached-file-name"></span>
+            <button id="remove-file-btn" title="Remove file">×</button>
+        </div>
+    </div>
     <div id="input-container">
+        <button id="attach-file-btn" title="Attach current file" aria-label="Attach file">
+            <svg viewBox="0 0 16 16" fill="currentColor">
+                <path d="M11.5 1a3.5 3.5 0 0 0-3.5 3.5V11a2 2 0 1 0 4 0V4.5a.5.5 0 0 1 1 0V11a3 3 0 1 1-6 0V4.5a4.5 4.5 0 1 1 9 0V11a.5.5 0 0 1-1 0V4.5A3.5 3.5 0 0 0 11.5 1z"/>
+            </svg>
+        </button>
         <div class="input-wrapper">
             <textarea 
                 id="message-input" 
@@ -486,9 +603,12 @@ How can I help you today?`,
             const chatContainer = document.getElementById('chat-container');
             const messageInput = document.getElementById('message-input');
             const sendButton = document.getElementById('send-button');
+            const attachFileBtn = document.getElementById('attach-file-btn');
+            const attachedFileDiv = document.getElementById('attached-file');
+            const attachedFileName = document.getElementById('attached-file-name');
+            const removeFileBtn = document.getElementById('remove-file-btn');
             const typingIndicator = document.getElementById('typing-indicator');
 
-            // Initialize send button state
             sendButton.disabled = true;
 
             messageInput.addEventListener('input', function() {
@@ -508,6 +628,14 @@ How can I help you today?`,
             });
 
             sendButton.addEventListener('click', sendMessage);
+
+            attachFileBtn.addEventListener('click', function() {
+                vscode.postMessage({ type: 'attachFile' });
+            });
+
+            removeFileBtn.addEventListener('click', function() {
+                vscode.postMessage({ type: 'removeContext' });
+            });
 
             function sendMessage() {
                 const message = messageInput.value.trim();
@@ -618,6 +746,14 @@ How can I help you today?`,
                         break;
                     case 'clearChat':
                         chatContainer.innerHTML = '';
+                        break;
+                    case 'fileAttached':
+                        attachedFileName.textContent = message.context.fileName;
+                        attachedFileDiv.style.display = 'block';
+                        break;
+                    case 'contextRemoved':
+                        attachedFileDiv.style.display = 'none';
+                        attachedFileName.textContent = '';
                         break;
                 }
             });
