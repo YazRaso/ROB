@@ -7,8 +7,9 @@ it is possible to have multiple agents each with their own assistants.
 
 import os
 import asyncio
+import requests
 from backboard import BackboardClient
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 import encryption
 import db
@@ -27,6 +28,14 @@ app.add_middleware(
 )
 
 drive_service = None  # Will be initialized when needed
+
+# GitHub token for creating webhooks (set via environment variable)
+# For demo: export GITHUB_TOKEN="your_personal_access_token"
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
+
+# Your server's public webhook URL (set via environment variable)
+# For demo with ngrok: export WEBHOOK_URL="https://abc123.ngrok.io/git/webhook"
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
 
 @app.get("/")
@@ -365,3 +374,168 @@ async def get_activity(client_id: str = "default_user", limit: int = 10):
     # For now, let's keep it simple or use mocks if table empty
     
     return sorted(drive_activity, key=lambda x: x["time"], reverse=True)[:limit]
+
+
+@app.post("/git/register")
+async def register_git_repository(client_id: str, repo_url: str, status_code=201):
+    """
+    Register a Git repository for tracking.
+    Automatically creates a webhook on the repo if GITHUB_TOKEN and WEBHOOK_URL are set.
+
+    Args:
+        client_id: The client ID
+        repo_url: Git repository URL
+    """
+    client = db.lookup_client(client_id)
+    if not client:
+        raise HTTPException(status_code=404, detail="Client does not exist")
+
+    # Check repository
+    repository = db.lookup_repository(repo_url)
+    if repository:
+        raise HTTPException(status_code=409, detail="Repository already registered")
+
+    # Parse the URL to get owner/repo
+    try:
+        owner, repo = parse_github_url(repo_url)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # Add repository to database
+    db.add_repository(repo_url, client_id)
+
+    # Auto-create webhook if credentials are configured
+    webhook_created = False
+    webhook_error = None
+
+    if GITHUB_TOKEN and WEBHOOK_URL:
+        try:
+            response = requests.post(
+                f"https://api.github.com/repos/{owner}/{repo}/hooks",
+                headers={
+                    "Authorization": f"token {GITHUB_TOKEN}",
+                    "Accept": "application/vnd.github.v3+json",
+                },
+                json={
+                    "name": "web",
+                    "active": True,
+                    "events": ["push"],
+                    "config": {
+                        "url": WEBHOOK_URL,
+                        "content_type": "json",
+                    },
+                },
+                timeout=30,
+            )
+            if response.status_code == 201:
+                webhook_created = True
+            else:
+                webhook_error = f"GitHub API returned {response.status_code}: {response.text}"
+        except Exception as e:
+            webhook_error = str(e)
+
+    return {
+        "status": "registered",
+        "repo_url": repo_url,
+        "client_id": client_id,
+        "webhook_created": webhook_created,
+        "webhook_error": webhook_error,
+    }
+
+
+@app.post("/git/webhook")
+async def git_webhook(request: Request):
+    """
+    Webhook endpoint to receive updates from GitHub on pushes.
+    GitHub calls this URL whenever a push happens to a registered repo.
+    Only processes files that were added or modified in the push.
+    """
+    payload = await request.json()
+
+    # Extract repo URL from GitHub's payload
+    repo_url = payload.get("repository", {}).get("html_url")
+    if not repo_url:
+        raise HTTPException(status_code=400, detail="Invalid webhook payload")
+
+    # Check if this repo is registered in our system
+    repository = db.lookup_repository(repo_url)
+    if not repository:
+        return {"status": "ignored", "reason": "Repository not registered"}
+
+    # Get the client_id from the database
+    client_id = repository["client_id"]
+
+    # Check client still exists
+    client = db.lookup_client(client_id)
+    if not client:
+        return {"status": "error", "reason": "Client no longer exists"}
+
+    owner, repo = parse_github_url(repo_url)
+
+    # Extract changed files from the commits in the payload
+    # Each commit has "added", "modified", and "removed" arrays
+    changed_file_paths = set()
+    commits = payload.get("commits", [])
+
+    for commit in commits:
+        # We care about added and modified files (not removed)
+        for file_path in commit.get("added", []):
+            changed_file_paths.add(file_path)
+        for file_path in commit.get("modified", []):
+            changed_file_paths.add(file_path)
+
+    if not changed_file_paths:
+        return {"status": "ignored", "reason": "No files changed"}
+
+    # Filter and fetch only the changed files
+    changed_files = []
+
+    for file_path in changed_file_paths:
+        # Skip files we don't want to ingest
+        if not should_ingest_file(file_path):
+            continue
+
+        # Skip files in directories we want to skip
+        path_parts = file_path.split("/")
+        if any(should_skip_directory(part) for part in path_parts[:-1]):
+            continue
+
+        # Fetch the file content directly using raw GitHub URL
+        try:
+            # Get default branch from payload or use 'main'
+            default_branch = payload.get("repository", {}).get("default_branch", "main")
+            raw_url = f"https://raw.githubusercontent.com/{owner}/{repo}/{default_branch}/{file_path}"
+            content = fetch_file_content(raw_url)
+            if content:
+                changed_files.append((file_path, content))
+        except Exception as e:
+            print(f"Error fetching file {file_path}: {e}")
+
+    if not changed_files:
+        return {"status": "ignored", "reason": "No ingestable files changed"}
+
+    # Send to Backboard memory
+    decrypted_api_key = encryption.decrypt_api_key(client["api_key"])
+    backboard_client = BackboardClient(api_key=decrypted_api_key)
+    assistant = db.lookup_assistant(client_id)
+    if not assistant:
+        return {"status": "error", "reason": "No assistant found"}
+
+    assistant_id = assistant["assistant_id"]
+    thread = await backboard_client.create_thread(assistant_id)
+
+    for file_path, file_content in changed_files:
+        async for chunk in await backboard_client.add_message(
+            thread_id=thread.thread_id,
+            content=f"Updated file: {file_path}\n\n{file_content}",
+            memory="Auto",
+            stream=True,
+        ):
+            pass  # Just consume the stream
+
+    return {
+        "status": "updated",
+        "repo_url": repo_url,
+        "files_updated": len(changed_files),
+        "files": [f[0] for f in changed_files],
+    }
