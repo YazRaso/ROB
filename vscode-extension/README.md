@@ -5,24 +5,30 @@ An intelligent VS Code extension that connects to your Backboard onboarding assi
 ## Features
 
 ### 💬 Interactive Chat Interface
+
 - Beautiful chat UI directly in VS Code sidebar
 - Real-time responses from your onboarding assistant
 - Markdown formatting support
 - Message history
 
 ### ⌨️ Keyboard Shortcuts
+
 - **Cmd+Shift+B** (Mac) / **Ctrl+Shift+B** (Windows/Linux): Open Backboard Chat
 - **Cmd+Shift+A** (Mac) / **Ctrl+Shift+A** (Windows/Linux): Quick Ask - popup input for fast questions
 
 ### 🔍 @source Command
+
 Type `@source` in your question to get exact source files with line numbers. The extension will show you:
+
 - File paths
 - Line number ranges
 - Code snippets
 - Click to open files directly in the editor
 
 ### 🎯 Smart Responses
+
 The assistant understands questions about:
+
 - **Meeting Notes**: "What was discussed in last week's meeting?"
 - **Git History**: "What changed in the drive integration?"
 - **Team Conversations**: "What did the team say about deployment?"
@@ -35,6 +41,7 @@ The assistant understands questions about:
 4. Click Install
 
 Or install from VSIX:
+
 ```bash
 code --install-extension backboard-assistant-0.1.0.vsix
 ```
@@ -42,6 +49,7 @@ code --install-extension backboard-assistant-0.1.0.vsix
 ## Setup
 
 ### 1. Configure API URL
+
 Open VS Code settings and set your Backboard API URL:
 
 ```json
@@ -52,6 +60,7 @@ Open VS Code settings and set your Backboard API URL:
 ```
 
 ### 2. Start Using
+
 - Click the Backboard icon in the Activity Bar
 - Or press **Cmd+Shift+B** to open the chat
 - Start asking questions!
@@ -59,16 +68,19 @@ Open VS Code settings and set your Backboard API URL:
 ## Usage Examples
 
 ### Basic Questions
+
 ```
 What meetings have you seen?
 ```
 
 ### Git Queries
+
 ```
 Show me recent commits on the backend
 ```
 
 ### Source Files
+
 ```
 @source How does the Drive authentication work?
 ```
@@ -85,11 +97,11 @@ Access these via Command Palette (Cmd+Shift+P):
 
 ## Configuration
 
-| Setting | Description | Default |
-|---------|-------------|---------|
-| `backboard.apiUrl` | Backboard API server URL | `http://localhost:8000` |
-| `backboard.clientId` | Your unique client ID | `vscode_user` |
-| `backboard.enableSourceLinks` | Enable @source command | `true` |
+| Setting                       | Description              | Default                 |
+| ----------------------------- | ------------------------ | ----------------------- |
+| `backboard.apiUrl`            | Backboard API server URL | `http://localhost:8000` |
+| `backboard.clientId`          | Your unique client ID    | `vscode_user`           |
+| `backboard.enableSourceLinks` | Enable @source command   | `true`                  |
 
 ## Development
 
@@ -117,20 +129,25 @@ vsce package
 ## Features in Detail
 
 ### Chat View
+
 - Persistent sidebar view
 - Auto-scrolling messages
 - Typing indicators
 - Beautiful VS Code theme integration
 
 ### Source File Integration
+
 When you use `@source`:
+
 - See file paths with syntax highlighting
 - View line number ranges
 - Click to open files
 - Navigate directly to relevant code
 
 ### Mock Mode
+
 The extension includes mock responses for testing without a backend connection. Perfect for:
+
 - Development
 - Demos
 - Offline testing
@@ -138,12 +155,15 @@ The extension includes mock responses for testing without a backend connection. 
 ## Troubleshooting
 
 ### Extension not activating
+
 Check the Output panel → Backboard Assistant for logs
 
 ### API connection issues
+
 Verify your `backboard.apiUrl` setting points to a running server
 
 ### Chat not showing
+
 Try: Command Palette → "Backboard: Open Chat"
 
 ## Roadmap
@@ -166,6 +186,7 @@ MIT License - see LICENSE file for details
 ## Support
 
 For issues and questions:
+
 - GitHub Issues: [github.com/your-repo/issues](https://github.com)
 - Documentation: [your-docs-url](https://docs.example.com)
 

@@ -7,6 +7,7 @@ The Backboard Onboarding Assistant VS Code extension has been built and is ready
 ### 📦 What Was Built
 
 #### Core Files
+
 - ✅ `src/extension.ts` - Main extension entry point with activation logic
 - ✅ `src/chatViewProvider.ts` - Beautiful chat UI with webview
 - ✅ `src/backboardService.ts` - API communication & mock responses
@@ -14,12 +15,14 @@ The Backboard Onboarding Assistant VS Code extension has been built and is ready
 - ✅ `tsconfig.json` - TypeScript configuration
 
 #### Compiled Output
+
 - ✅ `dist/extension.js` - Compiled main extension
 - ✅ `dist/chatViewProvider.js` - Compiled chat UI
 - ✅ `dist/backboardService.js` - Compiled service layer
 - ✅ Source maps for debugging
 
 #### Resources & Config
+
 - ✅ `resources/icon.svg` - Custom Backboard icon
 - ✅ `.vscode/launch.json` - Debug configuration
 - ✅ `.vscode/tasks.json` - Build tasks
@@ -30,6 +33,7 @@ The Backboard Onboarding Assistant VS Code extension has been built and is ready
 ### 🎯 Features Implemented
 
 #### 1. Interactive Chat Interface
+
 - Beautiful sidebar chat panel
 - Real-time typing indicators
 - Smooth animations
@@ -37,10 +41,12 @@ The Backboard Onboarding Assistant VS Code extension has been built and is ready
 - Message history persistence
 
 #### 2. Keyboard Shortcuts
+
 - **Cmd+Shift+B** / **Ctrl+Shift+B**: Open chat
 - **Cmd+Shift+A** / **Ctrl+Shift+A**: Quick ask
 
 #### 3. @source Command
+
 - Type `@source` in any question
 - Shows clickable source files
 - Displays line numbers
@@ -48,12 +54,14 @@ The Backboard Onboarding Assistant VS Code extension has been built and is ready
 - Opens files directly in editor
 
 #### 4. Smart Mock Responses
+
 - Meeting notes queries
-- Git history questions  
+- Git history questions
 - Telegram chat searches
 - Context-aware answers
 
 #### 5. Commands
+
 - `Backboard: Open Chat` - Open chat sidebar
 - `Backboard: Ask Question` - Quick popup input
 - `Backboard: Clear Chat History` - Reset chat
@@ -61,12 +69,14 @@ The Backboard Onboarding Assistant VS Code extension has been built and is ready
 ### 🚀 How to Use
 
 #### Quick Start
+
 ```bash
 cd vscode-extension
 # Everything is already installed and compiled!
 ```
 
 #### Run the Extension
+
 1. Open `vscode-extension` folder in VS Code
 2. Press **F5**
 3. Extension Development Host window opens
@@ -74,6 +84,7 @@ cd vscode-extension
 5. Start chatting!
 
 #### Try These Commands
+
 ```
 help
 What meetings have you seen?
@@ -130,23 +141,27 @@ Settings available in VS Code (Cmd+,):
 ### 📸 Demo Highlights
 
 **Feature 1: Beautiful Chat UI**
+
 - Clean, modern interface
 - Matches VS Code aesthetics
 - Smooth message animations
 
 **Feature 2: @source Magic**
+
 - Shows 3 relevant source files
 - Click to open in editor
 - Jumps to exact line numbers
 - Displays code snippets
 
 **Feature 3: Smart Responses**
+
 - Context-aware answers
 - Formatted with markdown
 - Bullet points & code blocks
 - Helpful suggestions
 
 **Feature 4: Quick Access**
+
 - Two keyboard shortcuts
 - Activity bar icon
 - Command palette integration
@@ -154,18 +169,21 @@ Settings available in VS Code (Cmd+,):
 ### 🎯 Next Steps
 
 #### Immediate (Testing)
+
 1. Press F5 to launch
 2. Test all commands in DEMO_GUIDE.md
 3. Try different themes
 4. Explore keyboard shortcuts
 
 #### Short-term (Integration)
+
 1. Connect to real Backboard API
 2. Replace mock responses
 3. Implement real @source file fetching
 4. Add authentication
 
 #### Long-term (Enhancement)
+
 1. Add inline code suggestions
 2. Voice input support
 3. Export chat history

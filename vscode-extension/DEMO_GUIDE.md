@@ -9,23 +9,27 @@ This guide shows you how to test every feature of the Backboard VS Code Extensio
 ## Part 1: Installation & Setup
 
 ### Step 1: Open in VS Code
+
 ```bash
 cd vscode-extension
 code .
 ```
 
 ### Step 2: Run Setup Script
+
 ```bash
 ./setup.sh
 ```
 
 Or manually:
+
 ```bash
 npm install
 npm run compile
 ```
 
 ### Step 3: Launch Extension
+
 - Press **F5** in VS Code
 - A new "Extension Development Host" window will open
 - The extension is now running!
@@ -39,6 +43,7 @@ npm run compile
 **Action:** Press `Cmd+Shift+B` (Mac) or `Ctrl+Shift+B` (Windows/Linux)
 
 **Expected Result:**
+
 - Backboard icon appears in Activity Bar (left sidebar)
 - Chat panel opens
 - Welcome message displays with features
@@ -50,16 +55,18 @@ npm run compile
 ### Feature 2: Basic Question
 
 **Action:** Type in chat:
+
 ```
 help
 ```
 
 **Expected Result:**
+
 ```
 I'm your Backboard Onboarding Assistant! I can help you with:
 
 📄 Meeting Notes: Query information from Google Drive documents
-🔀 Git History: Explore commits, file changes, and code evolution  
+🔀 Git History: Explore commits, file changes, and code evolution
 💬 Team Chats: Search Telegram conversations and discussions
 🔍 @source: Type @source to see exact source files
 
@@ -74,11 +81,13 @@ Try asking:
 ### Feature 3: Meeting Notes Query
 
 **Action:** Type:
+
 ```
 What meetings have you seen?
 ```
 
 **Expected Result:**
+
 ```
 Based on the meeting notes from Google Drive, I found several important discussions:
 
@@ -96,11 +105,13 @@ Would you like me to dive deeper into any specific meeting?
 ### Feature 4: Git History Query
 
 **Action:** Type:
+
 ```
 Show me recent commits
 ```
 
 **Expected Result:**
+
 ```
 Looking at the Git history, I can see:
 
@@ -117,11 +128,13 @@ Need details on a specific commit or file changes?
 ### Feature 5: Telegram Chat Query
 
 **Action:** Type:
+
 ```
 What did the team discuss?
 ```
 
 **Expected Result:**
+
 ```
 From Telegram conversations, the team has been discussing:
 
@@ -138,11 +151,13 @@ Want me to pull specific messages or topics?
 ### Feature 6: @source Command (STAR FEATURE!)
 
 **Action:** Type:
+
 ```
 @source How does authentication work?
 ```
 
 **Expected Result:**
+
 - Response explaining sources found
 - **Three clickable source file cards:**
   1. `src/backend/server.py` (Lines 67-92)
@@ -158,6 +173,7 @@ Want me to pull specific messages or topics?
 **Action:** Click on first source file
 
 **Expected Result:**
+
 - File opens in VS Code editor
 - Cursor jumps to line 67
 - Relevant code is visible
@@ -171,15 +187,18 @@ Want me to pull specific messages or topics?
 **Action:** Press `Cmd+Shift+A` (Mac) or `Ctrl+Shift+A` (Windows/Linux)
 
 **Expected Result:**
+
 - Input popup appears at top of screen
 - Placeholder: "Ask your onboarding assistant anything..."
 
 **Action:** Type:
+
 ```
 Tell me about the project
 ```
 
 **Expected Result:**
+
 - Chat sidebar auto-opens
 - Question appears in chat
 - Response is generated
@@ -190,12 +209,14 @@ Tell me about the project
 
 ### Feature 8: Clear Chat
 
-**Action:** 
+**Action:**
+
 - Press `Cmd+Shift+P` (Mac) or `Ctrl+Shift+P` (Windows/Linux)
 - Type: "Backboard: Clear Chat History"
 - Press Enter
 
 **Expected Result:**
+
 - Chat clears
 - Welcome message re-appears
 - Notification: "Chat history cleared!"
@@ -207,6 +228,7 @@ Tell me about the project
 **Action:** Ask any question and watch carefully
 
 **Expected Result:**
+
 - Three animated dots appear while processing
 - Dots pulse with smooth animation
 - Disappear when response arrives
@@ -232,10 +254,12 @@ Tell me about the project
 **Test:** Try different VS Code themes
 
 **Action:**
+
 - `Cmd+K Cmd+T` → Select "Dark+ (default dark)"
 - `Cmd+K Cmd+T` → Select "Light+ (default light)"
 
 **Expected Result:**
+
 - Chat colors adapt to theme
 - Always readable
 - Beautiful gradients on buttons
@@ -245,6 +269,7 @@ Tell me about the project
 ### Animation & Polish
 
 **Observe:**
+
 - Messages slide in smoothly (0.2s animation)
 - Typing dots pulse rhythmically
 - Source files highlight on hover
@@ -261,6 +286,7 @@ Tell me about the project
 **Search:** "backboard"
 
 **Available Settings:**
+
 ```json
 {
   "backboard.apiUrl": "http://localhost:8000",
@@ -290,14 +316,17 @@ Tell me about the project
 ### Test Edge Cases
 
 **Test 1:** Empty message
+
 - **Action:** Try to send empty message
 - **Expected:** Nothing happens
 
 **Test 2:** Long message
+
 - **Action:** Type a very long question (200+ words)
 - **Expected:** Text area expands (max 120px), scrolls if needed
 
 **Test 3:** Special characters
+
 - **Action:** Type: `What about @#$%^&* characters?`
 - **Expected:** Handled gracefully
 
@@ -308,29 +337,34 @@ Tell me about the project
 ### For Live Presentation:
 
 **Opening (30 seconds):**
+
 > "We've built a VS Code extension that brings your team's knowledge directly into your editor. Let me show you."
 
 **Demo (2 minutes):**
 
-1. **Press `Cmd+Shift+B`** 
+1. **Press `Cmd+Shift+B`**
+
    > "Quick access with a keyboard shortcut opens our chat interface."
 
 2. **Type: `help`**
+
    > "The assistant knows about Drive docs, Git history, and Telegram chats."
 
 3. **Type: `What meetings have you seen?`**
+
    > "It can recall meetings from months ago with specific details."
 
 4. **Type: `@source How does authentication work?`**
    > "Here's the magic: @source shows you the EXACT code files. Click any file..."
-   
 5. **Click source file**
+
    > "And we jump right to the implementation. No searching, instant context."
 
 6. **Press `Cmd+Shift+A`**
    > "Quick questions without leaving your workflow."
 
 **Closing (15 seconds):**
+
 > "This is how we're making onboarding seamless - knowledge at your fingertips, right where you code."
 
 ---
@@ -379,15 +413,18 @@ Capture these for documentation:
 ## Troubleshooting
 
 **Extension doesn't show:**
+
 - Ensure you pressed F5
 - Check for compilation errors
 - Restart Extension Development Host
 
 **Chat doesn't open:**
+
 - Try Command Palette → "Backboard: Open Chat"
 - Check console for errors (Help → Toggle Developer Tools)
 
 **Source files don't open:**
+
 - Ensure you have the workspace open
 - Files must exist in workspace
 

@@ -9,6 +9,7 @@ A fully functional VS Code extension for the Backboard Onboarding Assistant with
 ### Core Functionality
 
 #### 1. **Interactive Chat Sidebar**
+
 - Beautiful, theme-aware chat interface
 - Real-time typing indicators
 - Smooth message animations
@@ -16,10 +17,12 @@ A fully functional VS Code extension for the Backboard Onboarding Assistant with
 - Markdown formatting support
 
 #### 2. **Keyboard Shortcuts**
+
 - **Cmd+Shift+B** (Mac) / **Ctrl+Shift+B** (Win/Linux) - Open Backboard Chat
 - **Cmd+Shift+A** (Mac) / **Ctrl+Shift+A** (Win/Linux) - Quick Ask popup
 
 #### 3. **@source Command** ⭐ Star Feature
+
 - Type `@source` in any question
 - Returns clickable source files with:
   - Exact file paths
@@ -29,13 +32,16 @@ A fully functional VS Code extension for the Backboard Onboarding Assistant with
   - Auto-scroll to relevant line
 
 #### 4. **Smart Mock Responses**
+
 Context-aware answers for:
+
 - **Meeting Notes**: Queries about Drive documents
 - **Git History**: Questions about commits and code changes
 - **Telegram Chats**: Team conversation searches
 - **Help**: Feature explanations and tips
 
 #### 5. **Commands** (Via Command Palette)
+
 - `Backboard: Open Chat` - Opens chat sidebar
 - `Backboard: Ask Question` - Quick input popup
 - `Backboard: Clear Chat History` - Resets conversation
@@ -103,9 +109,11 @@ Show me recent commits
 ## 💡 Usage Examples
 
 ### Example 1: Meeting Query
+
 **You:** `What meetings have you seen?`
 
-**Assistant:** 
+**Assistant:**
+
 ```
 Based on the meeting notes from Google Drive, I found several important discussions:
 
@@ -117,9 +125,11 @@ Would you like me to dive deeper into any specific meeting?
 ```
 
 ### Example 2: Git History
+
 **You:** `Show me recent commits`
 
 **Assistant:**
+
 ```
 Looking at the Git history, I can see:
 
@@ -132,9 +142,11 @@ Need details on a specific commit or file changes?
 ```
 
 ### Example 3: @source Magic ⭐
+
 **You:** `@source How does authentication work?`
 
 **Assistant:**
+
 ```
 Here are the source files related to "How does authentication work?":
 
@@ -144,6 +156,7 @@ I found 3 relevant source files. Click on any file below to view the code.
 Then displays 3 clickable cards:
 
 **📄 src/backend/server.py** (Lines 67-92)
+
 ```python
 @app.post("/messages/send")
 async def add_thread(client_id: str, content: str, status_code=201):
@@ -154,6 +167,7 @@ async def add_thread(client_id: str, content: str, status_code=201):
 ```
 
 **📄 src/backend/drive_service.py** (Lines 145-167)
+
 ```python
 async def process_document(self, file_id: str, client_id: str):
     try:
@@ -162,12 +176,14 @@ async def process_document(self, file_id: str, client_id: str):
 ```
 
 **📄 README.md** (Lines 1-15)
+
 ```markdown
 # McHacks Onboarding Assistant
 
 An intelligent onboarding assistant that integrates with:
+
 - 📄 Google Drive (meeting notes, documentation)
-...
+  ...
 ```
 
 **Click any card → File opens at exact line! 🎯**
@@ -198,7 +214,7 @@ Access via VS Code Settings (Cmd+,):
 - **Language**: TypeScript
 - **Framework**: VS Code Extension API
 - **UI**: Custom Webview with HTML/CSS/JS
-- **Dependencies**: 
+- **Dependencies**:
   - axios (HTTP client)
   - @types/vscode
   - TypeScript 5.3.0
@@ -218,18 +234,21 @@ Access via VS Code Settings (Cmd+,):
 ## 🔄 Next Steps
 
 ### Immediate (Works Now)
+
 - ✅ Chat with mock responses
 - ✅ @source shows mock files
 - ✅ All keyboard shortcuts functional
 - ✅ Beautiful UI with animations
 
 ### Short-term (Connect to Backend)
+
 - [ ] Replace mocks with real Backboard API calls
 - [ ] Implement actual @source file fetching from API
 - [ ] Add authentication token support
 - [ ] Real-time response streaming
 
 ### Long-term (Enhancements)
+
 - [ ] Inline code suggestions
 - [ ] Voice input support
 - [ ] Export chat history
@@ -247,14 +266,17 @@ Access via VS Code Settings (Cmd+,):
 ## 🐛 Troubleshooting
 
 **Extension doesn't activate?**
+
 - Check Debug Console (Help → Toggle Developer Tools)
 - Verify compilation: `npm run compile`
 
 **Chat not showing?**
+
 - Command Palette → "Backboard: Open Chat"
 - Check Activity Bar for Backboard icon
 
 **Source files don't open?**
+
 - Ensure workspace folder is open
 - Files must exist in workspace
 
@@ -274,18 +296,23 @@ Access via VS Code Settings (Cmd+,):
 ## 🎬 Demo Script (2 minutes)
 
 **Opening (15s):**
+
 > "We've built a VS Code extension that brings your team's knowledge directly into your editor."
 
 **Feature 1 - Chat (30s):**
+
 > Press Cmd+Shift+B → "Instant access to an intelligent assistant that knows about your Drive docs, Git history, and team conversations."
 
 **Feature 2 - Questions (30s):**
+
 > Type: "What meetings have you seen?" → "It recalls months of meeting notes with specific details."
 
 **Feature 3 - @source (45s):**
+
 > Type: "@source How does authentication work?" → "Here's the magic: @source shows you the EXACT code." → Click file → "And we jump right to the implementation. No searching, instant context."
 
 **Closing (15s):**
+
 > "This is how we're making onboarding seamless - knowledge at your fingertips, right where you code."
 
 ## 📸 Screenshots Needed
@@ -340,6 +367,7 @@ vsce package             # Creates .vsix file
 ## Status: ✅ Complete & Ready to Demo!
 
 The VS Code extension is fully functional with:
+
 - Interactive chat interface ✅
 - Keyboard shortcuts ✅
 - @source command with code display ✅

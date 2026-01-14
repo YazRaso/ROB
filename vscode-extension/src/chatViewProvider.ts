@@ -1,101 +1,102 @@
-import * as vscode from 'vscode';
-import { BackboardService, ChatMessage } from './backboardService';
+import * as vscode from "vscode";
+import { BackboardService, ChatMessage } from "./backboardService";
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
-    private _view?: vscode.WebviewView;
-    private messages: ChatMessage[] = [];
+  private _view?: vscode.WebviewView;
+  private messages: ChatMessage[] = [];
 
-    constructor(
-        private readonly _extensionUri: vscode.Uri,
-        private readonly backboardService: BackboardService
-    ) {}
+  constructor(
+    private readonly _extensionUri: vscode.Uri,
+    private readonly backboardService: BackboardService
+  ) {}
 
-    public resolveWebviewView(
-        webviewView: vscode.WebviewView,
-        context: vscode.WebviewViewResolveContext,
-        _token: vscode.CancellationToken
-    ) {
-        this._view = webviewView;
+  public resolveWebviewView(
+    webviewView: vscode.WebviewView,
+    context: vscode.WebviewViewResolveContext,
+    _token: vscode.CancellationToken
+  ) {
+    this._view = webviewView;
 
-        webviewView.webview.options = {
-            enableScripts: true,
-            localResourceRoots: [this._extensionUri]
-        };
+    webviewView.webview.options = {
+      enableScripts: true,
+      localResourceRoots: [this._extensionUri],
+    };
 
-        webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
+    webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
 
-        webviewView.webview.onDidReceiveMessage(async data => {
-            console.log('Received message from webview:', data);
-            switch (data.type) {
-                case 'sendMessage':
-                    console.log('Handling user message:', data.message);
-                    await this.handleUserMessage(data.message);
-                    break;
-                case 'openFile':
-                    this.openFileAtLine(data.path, data.line);
-                    break;
-                case 'webviewReady':
-                    console.log('Webview is ready, sending welcome message');
-                    this.sendWelcomeMessage();
-                    break;
-            }
-        });
+    webviewView.webview.onDidReceiveMessage(async (data) => {
+      console.log("Received message from webview:", data);
+      switch (data.type) {
+        case "sendMessage":
+          console.log("Handling user message:", data.message);
+          await this.handleUserMessage(data.message);
+          break;
+        case "openFile":
+          this.openFileAtLine(data.path, data.line);
+          break;
+        case "webviewReady":
+          console.log("Webview is ready, sending welcome message");
+          this.sendWelcomeMessage();
+          break;
+      }
+    });
 
-        webviewView.onDidChangeVisibility(() => {
-            if (webviewView.visible && this.messages.length === 0) {
-                this.sendWelcomeMessage();
-            }
-        });
+    webviewView.onDidChangeVisibility(() => {
+      if (webviewView.visible && this.messages.length === 0) {
+        this.sendWelcomeMessage();
+      }
+    });
+  }
+
+  private async handleUserMessage(message: string) {
+    console.log("handleUserMessage called with:", message);
+    const userMessage: ChatMessage = {
+      role: "user",
+      content: message,
+      timestamp: Date.now(),
+    };
+
+    this.messages.push(userMessage);
+    console.log("Sending user message to webview");
+    this._view?.webview.postMessage({
+      type: "addMessage",
+      message: userMessage,
+    });
+
+    console.log("Showing typing indicator");
+    this._view?.webview.postMessage({ type: "showTyping" });
+
+    try {
+      console.log("Getting response from backboard service");
+      const response = await this.backboardService.sendMessage(message);
+      console.log("Got response:", response);
+      this.messages.push(response);
+      this._view?.webview.postMessage({ type: "hideTyping" });
+      this._view?.webview.postMessage({
+        type: "addMessage",
+        message: response,
+      });
+    } catch (error) {
+      console.error("Error getting response:", error);
+      this._view?.webview.postMessage({ type: "hideTyping" });
+      const errorMessage: ChatMessage = {
+        role: "assistant",
+        content:
+          "Sorry, I encountered an error. Please check your connection and try again.",
+        timestamp: Date.now(),
+      };
+      this.messages.push(errorMessage);
+      this._view?.webview.postMessage({
+        type: "addMessage",
+        message: errorMessage,
+      });
     }
+  }
 
-    private async handleUserMessage(message: string) {
-        console.log('handleUserMessage called with:', message);
-        const userMessage: ChatMessage = {
-            role: 'user',
-            content: message,
-            timestamp: Date.now()
-        };
-
-        this.messages.push(userMessage);
-        console.log('Sending user message to webview');
-        this._view?.webview.postMessage({
-            type: 'addMessage',
-            message: userMessage
-        });
-
-        console.log('Showing typing indicator');
-        this._view?.webview.postMessage({ type: 'showTyping' });
-
-        try {
-            console.log('Getting response from backboard service');
-            const response = await this.backboardService.sendMessage(message);
-            console.log('Got response:', response);
-            this.messages.push(response);
-            this._view?.webview.postMessage({ type: 'hideTyping' });
-            this._view?.webview.postMessage({
-                type: 'addMessage',
-                message: response
-            });
-        } catch (error) {
-            console.error('Error getting response:', error);
-            this._view?.webview.postMessage({ type: 'hideTyping' });
-            const errorMessage: ChatMessage = {
-                role: 'assistant',
-                content: 'Sorry, I encountered an error. Please check your connection and try again.',
-                timestamp: Date.now()
-            };
-            this.messages.push(errorMessage);
-            this._view?.webview.postMessage({
-                type: 'addMessage',
-                message: errorMessage
-            });
-        }
-    }
-
-    private sendWelcomeMessage() {
-        const welcomeMessage: ChatMessage = {
-            role: 'assistant',
-            content: `Welcome to Backboard Assistant! 👋
+  private sendWelcomeMessage() {
+    const welcomeMessage: ChatMessage = {
+      role: "assistant",
+      content: `Welcome to Backboard Assistant! 👋
 
 I can help you explore your team's knowledge from:
 • 📄 Google Drive documents
@@ -108,54 +109,67 @@ I can help you explore your team's knowledge from:
 • Ask about meetings, code changes, or team discussions
 
 How can I help you today?`,
-            timestamp: Date.now()
-        };
+      timestamp: Date.now(),
+    };
 
-        this.messages.push(welcomeMessage);
+    this.messages.push(welcomeMessage);
+    this._view?.webview.postMessage({
+      type: "addMessage",
+      message: welcomeMessage,
+    });
+  }
+
+  public sendMessageFromCommand(message: string) {
+    if (this._view) {
+      this._view.show?.(true);
+      setTimeout(() => {
         this._view?.webview.postMessage({
-            type: 'addMessage',
-            message: welcomeMessage
+          type: "setInput",
+          message: message,
         });
+      }, 100);
+    }
+  }
+
+  public clearChat() {
+    this.messages = [];
+    this._view?.webview.postMessage({ type: "clearChat" });
+    this.sendWelcomeMessage();
+    vscode.window.showInformationMessage("Chat history cleared!");
+  }
+
+  private openFileAtLine(filePath: string, line?: number) {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders) {
+      vscode.window.showErrorMessage("No workspace folder open");
+      return;
     }
 
-    public sendMessageFromCommand(message: string) {
-        if (this._view) {
-            this._view.show?.(true);
-            setTimeout(() => {
-                this._view?.webview.postMessage({
-                    type: 'setInput',
-                    message: message
-                });
-            }, 100);
-        }
+    const uri = vscode.Uri.joinPath(workspaceFolders[0].uri, filePath);
+    vscode.window.showTextDocument(uri, {
+      selection: line ? new vscode.Range(line - 1, 0, line - 1, 0) : undefined,
+    });
+  }
+
+  private getNonce() {
+    let text = "";
+    const possible =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    for (let i = 0; i < 32; i++) {
+      text += possible.charAt(Math.floor(Math.random() * possible.length));
     }
+    return text;
+  }
 
-    public clearChat() {
-        this.messages = [];
-        this._view?.webview.postMessage({ type: 'clearChat' });
-        this.sendWelcomeMessage();
-        vscode.window.showInformationMessage('Chat history cleared!');
-    }
+  private _getHtmlForWebview(webview: vscode.Webview) {
+    const nonce = this.getNonce();
 
-    private openFileAtLine(filePath: string, line?: number) {
-        const workspaceFolders = vscode.workspace.workspaceFolders;
-        if (!workspaceFolders) {
-            vscode.window.showErrorMessage('No workspace folder open');
-            return;
-        }
-
-        const uri = vscode.Uri.joinPath(workspaceFolders[0].uri, filePath);
-        vscode.window.showTextDocument(uri, {
-            selection: line ? new vscode.Range(line - 1, 0, line - 1, 0) : undefined
-        });
-    }
-
-    private _getHtmlForWebview(webview: vscode.Webview) {
-        return `<!DOCTYPE html>
+    return `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
     <title>Backboard Chat</title>
     <style>
         * {
@@ -167,7 +181,7 @@ How can I help you today?`,
         body {
             font-family: var(--vscode-font-family);
             font-size: var(--vscode-font-size);
-            background-color: var(--vscode-editor-background);
+            background: linear-gradient(180deg, var(--vscode-editor-background) 0%, var(--vscode-sideBar-background) 100%);
             color: var(--vscode-editor-foreground);
             height: 100vh;
             display: flex;
@@ -177,10 +191,10 @@ How can I help you today?`,
         #chat-container {
             flex: 1;
             overflow-y: auto;
-            padding: 16px;
+            padding: 20px;
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 16px;
         }
 
         .message {
@@ -334,25 +348,56 @@ How can I help you today?`,
         }
 
         #input-container {
-            padding: 12px;
+            padding: 12px 16px;
             background-color: var(--vscode-editor-background);
             border-top: 1px solid var(--vscode-panel-border);
             display: flex;
+            align-items: flex-end;
             gap: 8px;
+        }
+
+        .input-wrapper {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            background-color: var(--vscode-input-background);
+            border: 1px solid var(--vscode-input-border);
+            border-radius: 6px;
+            padding: 8px 12px;
+            transition: all 0.2s ease;
+        }
+
+        .input-wrapper:focus-within {
+            border-color: var(--vscode-focusBorder);
+            box-shadow: 0 0 0 1px var(--vscode-focusBorder);
         }
 
         #message-input {
             flex: 1;
-            background-color: var(--vscode-input-background);
+            background: transparent;
             color: var(--vscode-input-foreground);
-            border: 1px solid var(--vscode-input-border);
-            border-radius: 8px;
-            padding: 10px 12px;
+            border: none;
+            padding: 0;
             font-family: var(--vscode-font-family);
-            font-size: var(--vscode-font-size);
+            font-size: 13px;
+            line-height: 20px;
             resize: none;
             outline: none;
-            max-height: 120px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        #message-input::placeholder {
+            color: var(--vscode-input-placeholderForeground);
+        }
+
+        #message-input::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        #message-input::-webkit-scrollbar-thumb {
+            background: var(--vscode-scrollbarSlider-background);
+            border-radius: 3px;
         }
 
         #message-input:focus {
@@ -360,23 +405,37 @@ How can I help you today?`,
         }
 
         #send-button {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
             background-color: var(--vscode-button-background);
             color: var(--vscode-button-foreground);
             border: none;
-            border-radius: 8px;
-            padding: 0 16px;
+            border-radius: 6px;
             cursor: pointer;
-            font-weight: 600;
-            transition: background-color 0.2s;
+            transition: all 0.15s ease;
+            flex-shrink: 0;
         }
 
-        #send-button:hover {
+        #send-button:hover:not(:disabled) {
             background-color: var(--vscode-button-hoverBackground);
+            transform: scale(1.05);
+        }
+
+        #send-button:active {
+            transform: scale(0.95);
         }
 
         #send-button:disabled {
-            opacity: 0.5;
+            opacity: 0.4;
             cursor: not-allowed;
+        }
+
+        #send-button svg {
+            width: 16px;
+            height: 16px;
         }
 
         .shortcut-hint {
@@ -402,7 +461,7 @@ How can I help you today?`,
 </head>
 <body>
     <div class="shortcut-hint">
-        💡 Tip: Press Cmd+Shift+A for quick questions | Type @source to see source files
+        Cmd+Shift+B to open • Cmd+Shift+A for quick questions
     </div>
     <div id="chat-container"></div>
     <div id="typing-indicator">
@@ -411,151 +470,171 @@ How can I help you today?`,
         <div class="typing-dot"></div>
     </div>
     <div id="input-container">
-        <textarea 
-            id="message-input" 
-            placeholder="Ask about meetings, commits, or team discussions..."
-            rows="1"
-        ></textarea>
-        <button id="send-button">Send</button>
+        <div class="input-wrapper">
+            <textarea 
+                id="message-input" 
+                placeholder="Ask Backboard..."
+                rows="1"
+                aria-label="Chat message"
+            ></textarea>
+        </div>
+        <button id="send-button" title="Send message" aria-label="Send message">
+            <svg viewBox="0 0 16 16" fill="currentColor">
+                <path d="M15.854 7.354l-7-7a.5.5 0 0 0-.708.708L14.293 7H.5a.5.5 0 0 0 0 1h13.793l-6.147 6.146a.5.5 0 0 0 .708.708l7-7a.5.5 0 0 0 0-.708z"/>
+            </svg>
+        </button>
     </div>
 
-    <script>
-        const vscode = acquireVsCodeApi();
-        const chatContainer = document.getElementById('chat-container');
-        const messageInput = document.getElementById('message-input');
-        const sendButton = document.getElementById('send-button');
-        const typingIndicator = document.getElementById('typing-indicator');
+    <script nonce="${nonce}">
+        (function() {
+            console.log('Webview script starting...');
+            const vscode = acquireVsCodeApi();
+            console.log('VS Code API acquired');
+            const chatContainer = document.getElementById('chat-container');
+            const messageInput = document.getElementById('message-input');
+            const sendButton = document.getElementById('send-button');
+            const typingIndicator = document.getElementById('typing-indicator');
 
-        messageInput.addEventListener('input', function() {
-            this.style.height = 'auto';
-            this.style.height = Math.min(this.scrollHeight, 120) + 'px';
-        });
+            // Initialize send button state
+            sendButton.disabled = true;
 
-        messageInput.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                sendMessage();
-            }
-        });
-
-        sendButton.addEventListener('click', sendMessage);
-
-        function sendMessage() {
-            const message = messageInput.value.trim();
-            console.log('Send button clicked, message:', message);
-            if (!message) {
-                console.log('Message is empty, not sending');
-                return;
-            }
-
-            console.log('Posting message to extension');
-            vscode.postMessage({
-                type: 'sendMessage',
-                message: message
+            messageInput.addEventListener('input', function() {
+                this.style.height = 'auto';
+                const newHeight = Math.min(this.scrollHeight, 200);
+                this.style.height = newHeight + 'px';
+                
+                // Enable/disable send button based on content
+                sendButton.disabled = !this.value.trim();
             });
 
-            messageInput.value = '';
-            messageInput.style.height = 'auto';
-        }
+            messageInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                }
+            });
 
-        function addMessage(message) {
-            const messageDiv = document.createElement('div');
-            messageDiv.className = \`message \${message.role}\`;
+            sendButton.addEventListener('click', sendMessage);
 
-            const header = document.createElement('div');
-            header.className = 'message-header';
-            header.textContent = message.role === 'user' ? 'You' : 'Backboard';
-            messageDiv.appendChild(header);
+            function sendMessage() {
+                const message = messageInput.value.trim();
+                if (!message) {
+                    return;
+                }
 
-            const content = document.createElement('div');
-            content.className = 'message-content';
-            content.innerHTML = formatMessage(message.content);
-            messageDiv.appendChild(content);
-
-            if (message.sources && message.sources.length > 0) {
-                const sourcesContainer = document.createElement('div');
-                sourcesContainer.className = 'source-files';
-                
-                message.sources.forEach(source => {
-                    const sourceDiv = document.createElement('div');
-                    sourceDiv.className = 'source-file';
-                    sourceDiv.onclick = () => {
-                        vscode.postMessage({
-                            type: 'openFile',
-                            path: source.path,
-                            line: source.lineStart
-                        });
-                    };
-
-                    const sourceHeader = document.createElement('div');
-                    sourceHeader.className = 'source-file-header';
-                    sourceHeader.innerHTML = \`
-                        <span class="source-file-icon">📄</span>
-                        <span>\${source.path}</span>
-                    \`;
-                    sourceDiv.appendChild(sourceHeader);
-
-                    if (source.lineStart) {
-                        const lines = document.createElement('div');
-                        lines.className = 'source-file-lines';
-                        lines.textContent = \`Lines \${source.lineStart}-\${source.lineEnd || source.lineStart}\`;
-                        sourceDiv.appendChild(lines);
-                    }
-
-                    if (source.content) {
-                        const code = document.createElement('div');
-                        code.className = 'source-file-code';
-                        code.textContent = source.content;
-                        sourceDiv.appendChild(code);
-                    }
-
-                    sourcesContainer.appendChild(sourceDiv);
+                vscode.postMessage({
+                    type: 'sendMessage',
+                    message: message
                 });
 
-                content.appendChild(sourcesContainer);
+                messageInput.value = '';
+                messageInput.style.height = 'auto';
+                sendButton.disabled = true;
             }
 
-            chatContainer.appendChild(messageDiv);
-            chatContainer.scrollTop = chatContainer.scrollHeight;
-        }
+            function addMessage(message) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'message ' + message.role;
 
-        function formatMessage(text) {
-            text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-            text = text.replace(/\`(.+?)\`/g, '<code>$1</code>');
-            text = text.replace(/\n/g, '<br>');
-            return text;
-        }
+                const header = document.createElement('div');
+                header.className = 'message-header';
+                header.textContent = message.role === 'user' ? 'You' : 'Backboard';
+                messageDiv.appendChild(header);
 
-        window.addEventListener('message', event => {
-            const message = event.data;
-            switch (message.type) {
-                case 'addMessage':
-                    addMessage(message.message);
-                    break;
-                case 'showTyping':
-                    typingIndicator.classList.add('show');
-                    chatContainer.scrollTop = chatContainer.scrollHeight;
-                    break;
-                case 'hideTyping':
-                    typingIndicator.classList.remove('show');
-                    break;
-                case 'setInput':
-                    messageInput.value = message.message;
-                    messageInput.focus();
-                    break;
-                case 'clearChat':
-                    chatContainer.innerHTML = '';
-                    break;
+                const content = document.createElement('div');
+                content.className = 'message-content';
+                content.innerHTML = formatMessage(message.content);
+                messageDiv.appendChild(content);
+
+                if (message.sources && message.sources.length > 0) {
+                    const sourcesContainer = document.createElement('div');
+                    sourcesContainer.className = 'source-files';
+                    
+                    message.sources.forEach(function(source) {
+                        const sourceDiv = document.createElement('div');
+                        sourceDiv.className = 'source-file';
+                        sourceDiv.onclick = function() {
+                            vscode.postMessage({
+                                type: 'openFile',
+                                path: source.path,
+                                line: source.lineStart
+                            });
+                        };
+
+                        const sourceHeader = document.createElement('div');
+                        sourceHeader.className = 'source-file-header';
+                        
+                        const icon = document.createElement('span');
+                        icon.className = 'source-file-icon';
+                        icon.textContent = '📄';
+                        sourceHeader.appendChild(icon);
+                        
+                        const pathSpan = document.createElement('span');
+                        pathSpan.textContent = source.path;
+                        sourceHeader.appendChild(pathSpan);
+                        
+                        sourceDiv.appendChild(sourceHeader);
+
+                        if (source.lineStart) {
+                            const lines = document.createElement('div');
+                            lines.className = 'source-file-lines';
+                            lines.textContent = 'Lines ' + source.lineStart + '-' + (source.lineEnd || source.lineStart);
+                            sourceDiv.appendChild(lines);
+                        }
+
+                        if (source.content) {
+                            const code = document.createElement('div');
+                            code.className = 'source-file-code';
+                            code.textContent = source.content;
+                            sourceDiv.appendChild(code);
+                        }
+
+                        sourcesContainer.appendChild(sourceDiv);
+                    });
+
+                    content.appendChild(sourcesContainer);
+                }
+
+                chatContainer.appendChild(messageDiv);
+                chatContainer.scrollTop = chatContainer.scrollHeight;
             }
-        });
 
-        // Notify extension that webview is ready
-        vscode.postMessage({ type: 'webviewReady' });
-                    break;
+            function formatMessage(text) {
+                text = text.replace(/\\*\\*(.+?)\\*\\*/g, '<strong>$1</strong>');
+                text = text.replace(/\`(.+?)\`/g, '<code>$1</code>');
+                text = text.replace(/\\n/g, '<br>');
+                return text;
             }
-        });
+
+            window.addEventListener('message', function(event) {
+                const message = event.data;
+                switch (message.type) {
+                    case 'addMessage':
+                        addMessage(message.message);
+                        break;
+                    case 'showTyping':
+                        typingIndicator.classList.add('show');
+                        chatContainer.scrollTop = chatContainer.scrollHeight;
+                        break;
+                    case 'hideTyping':
+                        typingIndicator.classList.remove('show');
+                        break;
+                    case 'setInput':
+                        messageInput.value = message.message;
+                        messageInput.focus();
+                        break;
+                    case 'clearChat':
+                        chatContainer.innerHTML = '';
+                        break;
+                }
+            });
+
+            console.log('About to send webviewReady message');
+            vscode.postMessage({ type: 'webviewReady' });
+            console.log('webviewReady message sent');
+        })();
     </script>
 </body>
 </html>`;
-    }
+  }
 }
