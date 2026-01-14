@@ -56,10 +56,16 @@ export default function LiveTrackingPage() {
     if (typeof window !== "undefined" && (window as any).Globe) {
       const globeElement = document.getElementById("globeViz");
       if (globeElement) {
-        // Clear previous instance if any (though Globe.gl usually appends)
+        // Clear previous instance if any
         globeElement.innerHTML = '';
 
+        // Explicitly set dimensions to match container
+        const width = globeElement.clientWidth;
+        const height = globeElement.clientHeight;
+
         new (window as any).Globe(globeElement)
+          .width(width)
+          .height(height)
           .globeImageUrl(
             "//cdn.jsdelivr.net/npm/three-globe/example/img/earth-night.jpg"
           )
@@ -87,8 +93,9 @@ export default function LiveTrackingPage() {
         </p>
       </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 relative glass-card rounded-3xl overflow-hidden h-[600px] flex items-center justify-center">
+      <div className="flex flex-col gap-8">
+        {/* Full width globe centered */}
+        <div className="relative glass-card rounded-3xl overflow-hidden h-[600px] flex items-center justify-center w-full shadow-2xl shadow-indigo-500/10">
           <div className="absolute inset-0 bg-gradient-to-b from-indigo-500/5 to-transparent pointer-events-none" />
           <div id="globeViz" className="w-full h-full cursor-grab active:cursor-grabbing"></div>
           <div className="absolute bottom-6 left-6 flex items-center gap-2 px-3 py-1.5 bg-black/40 backdrop-blur-md rounded-lg border border-zinc-800/50">
@@ -97,36 +104,45 @@ export default function LiveTrackingPage() {
           </div>
         </div>
 
-        <div className="space-y-6">
-          <div className="glass-card p-6 rounded-3xl h-full border-zinc-800/30">
-            <h3 className="text-lg font-bold mb-6">Recent Activity</h3>
-            <div className="space-y-6">
-              {updates.map((update, i) => {
-                const colorMap = {
-                  blue: { bg: "bg-blue-500", text: "text-blue-500", border: "hover:border-blue-500/50" },
-                  emerald: { bg: "bg-emerald-500", text: "text-emerald-500", border: "hover:border-emerald-500/50" },
-                  purple: { bg: "bg-purple-500", text: "text-purple-500", border: "hover:border-purple-500/50" },
-                };
-                const colors = colorMap[update.color as keyof typeof colorMap] || colorMap.blue;
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="lg:col-span-3">
+            <div className="glass-card p-6 rounded-3xl border-zinc-800/30">
+              <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
+                <span className="material-symbols-outlined text-zinc-400">history</span>
+                Recent Activity Log
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {updates.map((update, i) => {
+                  const colorMap = {
+                    blue: { bg: "bg-blue-500", text: "text-blue-500", border: "hover:border-blue-500/50" },
+                    emerald: { bg: "bg-emerald-500", text: "text-emerald-500", border: "hover:border-emerald-500/50" },
+                    purple: { bg: "bg-purple-500", text: "text-purple-500", border: "hover:border-purple-500/50" },
+                  };
+                  const colors = colorMap[update.color as keyof typeof colorMap] || colorMap.blue;
 
-                return (
-                  <div key={i} className={`group relative pl-6 border-l border-zinc-800 ${colors.border} transition-colors`}>
-                    <div className={`absolute left-[-4.5px] top-1 w-2 h-2 rounded-full ${colors.bg} group-hover:scale-125 transition-transform`} />
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <span className={`material-symbols-outlined text-xs ${colors.text}`}>{update.source === "Drive" ? "add_to_drive" : update.source === "GitHub" ? "terminal" : "send"}</span>
-                      <p className={`text-[10px] font-bold uppercase tracking-widest ${colors.text}`}>{update.source}</p>
+                  return (
+                    <div key={i} className={`group relative p-4 rounded-2xl bg-zinc-900/50 border border-zinc-800/50 ${colors.border} transition-all hover:bg-zinc-800/50`}>
+                      <div className="flex items-start gap-4">
+                        <div className={`w-2 h-2 mt-1.5 rounded-full ${colors.bg} shrink-0`} />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className={`material-symbols-outlined text-[16px] ${colors.text}`}>{update.source === "Drive" ? "add_to_drive" : update.source === "GitHub" ? "terminal" : "send"}</span>
+                            <span className={`text-[10px] font-bold uppercase tracking-widest ${colors.text}`}>{update.source}</span>
+                            <span className="ml-auto text-[10px] font-medium text-zinc-500">{update.time}</span>
+                          </div>
+                          <p className="text-sm font-medium text-zinc-200 truncate">{update.title}</p>
+                          <p className="text-xs text-zinc-500 line-clamp-2 mt-1">{update.summary}</p>
+                        </div>
+                      </div>
                     </div>
-                    <p className="text-sm font-semibold text-zinc-200 mb-1 leading-tight">{update.title}</p>
-                    <p className="text-xs text-zinc-500 mb-2 line-clamp-2">{update.summary}</p>
-                    <p className="text-[10px] font-medium text-zinc-600 uppercase">{update.time} • UTC-5</p>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="mt-8">
-              <button className="btn-secondary w-full py-2.5 text-xs uppercase tracking-widest font-bold opacity-50 hover:opacity-100 transition-opacity">
-                View Full Logs
-              </button>
+                  );
+                })}
+              </div>
+              <div className="mt-6 flex justify-center">
+                <button className="btn-secondary py-2 px-6 text-xs uppercase tracking-widest font-bold opacity-70 hover:opacity-100 transition-opacity">
+                  View Full Logs
+                </button>
+              </div>
             </div>
           </div>
         </div>
