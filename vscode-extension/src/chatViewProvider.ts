@@ -25,17 +25,14 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
 
     webviewView.webview.onDidReceiveMessage(async (data) => {
-      console.log("Received message from webview:", data);
       switch (data.type) {
         case "sendMessage":
-          console.log("Handling user message:", data.message);
           await this.handleUserMessage(data.message);
           break;
         case "openFile":
           this.openFileAtLine(data.path, data.line);
           break;
         case "webviewReady":
-          console.log("Webview is ready, sending welcome message");
           this.sendWelcomeMessage();
           break;
       }
@@ -49,7 +46,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   }
 
   private async handleUserMessage(message: string) {
-    console.log("handleUserMessage called with:", message);
     const userMessage: ChatMessage = {
       role: "user",
       content: message,
@@ -57,7 +53,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     };
 
     this.messages.push(userMessage);
-    console.log("Sending user message to webview");
     this._view?.webview.postMessage({
       type: "addMessage",
       message: userMessage,
@@ -487,9 +482,7 @@ How can I help you today?`,
 
     <script nonce="${nonce}">
         (function() {
-            console.log('Webview script starting...');
             const vscode = acquireVsCodeApi();
-            console.log('VS Code API acquired');
             const chatContainer = document.getElementById('chat-container');
             const messageInput = document.getElementById('message-input');
             const sendButton = document.getElementById('send-button');
@@ -629,9 +622,7 @@ How can I help you today?`,
                 }
             });
 
-            console.log('About to send webviewReady message');
             vscode.postMessage({ type: 'webviewReady' });
-            console.log('webviewReady message sent');
         })();
     </script>
 </body>
