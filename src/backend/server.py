@@ -62,9 +62,38 @@ async def create_client(client_id: str, api_key: str, status_code=201):
 
 
 # add_thread uses client_ids assistant and prompts backboard with content
-# memories are added manually
 @app.post("/messages/send")
 async def add_thread(client_id: str, content: str, status_code=201):
+    client = db.lookup_client(client_id)
+    if not client:
+        raise HTTPException(status_code=404, detail="Client does not exist!")
+    # For simplicity, we assume that each client has one assistant
+    decrypted_api_key = encryption.decrypt_api_key(client["api_key"])
+    backboard_client = BackboardClient(api_key=decrypted_api_key)
+    assistant = db.lookup_assistant(client_id)
+    if not assistant:
+        raise HTTPException(
+            status_code=404, detail="No assistant found for this client!"
+        )
+    assistant_id = assistant["assistant_id"]
+    thread = await backboard_client.create_thread(assistant_id)
+    output = []
+    sources = []
+    async for chunk in await backboard_client.add_message(
+        thread_id=thread.thread_id,
+        content=content,
+        memory="auto",
+        stream=True
+    ):
+        print(chunk)
+        if chunk['type'] == 'content_streaming':
+            output.append(chunk['content'])
+    output = "".join(output)
+    return output
+
+# query sends backboards response along with sources of information
+@app.post("/messages/query")
+async def query(client_id: str, content: str, status_code=201):
     client = db.lookup_client(client_id)
     if not client:
         raise HTTPException(status_code=404, detail="Client does not exist!")
@@ -115,11 +144,10 @@ async def add_thread(client_id: str, content: str, status_code=201):
     print(sources)
     return (output, sources)
 
-
-@app.post("/messages/summarize")
-async def summarize(client_id: str, status_code=201):
-    content = "Summarize all the memories that you have"
-    return await add_thread(client_id=client_id, content=content)
+#@app.post("/messages/summarize")
+#async def summarize(client_id: str, status_code=201):
+#    content = "Summarize all the memories that you have"
+#    return await add_thread(client_id=client_id, content=content)
 
 
 # Drive-related endpoints
