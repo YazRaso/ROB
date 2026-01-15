@@ -70,8 +70,8 @@
       "properties": {
         "backboard.apiUrl": {
           "type": "string",
-          "default": "https://rob-production.up.railway.app/",
-          "description": "Backboard API server URL"
+          "default": "http://localhost:8000",
+          "description": "Backboard API server URL (use http://localhost:8000 for local testing)"
         },
         "backboard.clientId": {
           "type": "string",

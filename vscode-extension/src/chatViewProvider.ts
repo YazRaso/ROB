@@ -103,17 +103,20 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   private sendWelcomeMessage() {
     const welcomeMessage: ChatMessage = {
       role: "assistant",
-      content: `Welcome to Backboard Assistant!
+      content: `Welcome to Backboard! 👋
 
-I can help you explore your team's knowledge from:
-• Google Drive documents
-• Git history and commits
-• Telegram conversations
+I'm your TaskFlow onboarding assistant. I have knowledge from:
+• **Google Drive** - ADRs, meeting notes, legal docs
+• **Git history** - Commits, code changes, decisions
+• **Telegram** - Team chats and discussions
 
-**Quick tips:**
-• Type @source to see exact source files
-• Use Cmd+Shift+A for quick questions
-• Ask about meetings, code changes, or team discussions
+**Try asking me:**
+• "Why is the rate limit 47?"
+• "Who owns the v1 API?"
+• "Why don't we use SQLAlchemy?"
+• "Is it safe to delete projects?"
+
+Use **@source** to see exact source references.
 
 How can I help you today?`,
       timestamp: Date.now(),
@@ -155,7 +158,7 @@ How can I help you today?`,
     const document = editor.document;
     const selection = editor.selection;
     const fileName = vscode.workspace.asRelativePath(document.uri);
-    
+
     if (!selection.isEmpty) {
       const selectedText = document.getText(selection);
       this.currentContext = {
@@ -304,6 +307,15 @@ How can I help you today?`,
             gap: 8px;
         }
 
+        .sources-header {
+            font-weight: 600;
+            font-size: 13px;
+            color: var(--vscode-descriptionForeground);
+            margin-bottom: 4px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid var(--vscode-panel-border);
+        }
+
         .source-file {
             background-color: var(--vscode-editor-inactiveSelectionBackground);
             border: 1px solid var(--vscode-panel-border);
@@ -311,12 +323,42 @@ How can I help you today?`,
             padding: 10px;
             cursor: pointer;
             transition: all 0.2s;
+            border-left: 3px solid var(--vscode-panel-border);
         }
 
         .source-file:hover {
             background-color: var(--vscode-list-hoverBackground);
             border-color: var(--vscode-focusBorder);
             transform: translateX(4px);
+        }
+
+        /* Telegram source styling */
+        .source-type-telegram {
+            border-left-color: #0088cc;
+        }
+        .source-type-telegram .source-label {
+            color: #0088cc;
+        }
+
+        /* Google Drive source styling */
+        .source-type-drive {
+            border-left-color: #4285f4;
+        }
+        .source-type-drive .source-label {
+            color: #4285f4;
+        }
+
+        /* Git source styling */
+        .source-type-git {
+            border-left-color: #f05033;
+        }
+        .source-type-git .source-label {
+            color: #f05033;
+        }
+
+        /* Unknown source styling */
+        .source-type-unknown {
+            border-left-color: var(--vscode-descriptionForeground);
         }
 
         .source-file-header {
@@ -326,6 +368,10 @@ How can I help you today?`,
             font-weight: 600;
             font-size: 13px;
             margin-bottom: 6px;
+        }
+
+        .source-label {
+            font-weight: 600;
         }
 
         .source-file-icon {
@@ -346,8 +392,11 @@ How can I help you today?`,
             font-family: var(--vscode-editor-font-family);
             font-size: 12px;
             overflow-x: auto;
-            white-space: pre;
+            white-space: pre-wrap;
+            word-wrap: break-word;
             line-height: 1.4;
+            max-height: 150px;
+            overflow-y: auto;
         }
 
         #typing-indicator {
@@ -699,9 +748,15 @@ How can I help you today?`,
                     const sourcesContainer = document.createElement('div');
                     sourcesContainer.className = 'source-files';
                     
+                    // Add sources header
+                    const sourcesHeader = document.createElement('div');
+                    sourcesHeader.className = 'sources-header';
+                    sourcesHeader.textContent = '📚 Sources (' + message.sources.length + ')';
+                    sourcesContainer.appendChild(sourcesHeader);
+                    
                     message.sources.forEach(function(source) {
                         const sourceDiv = document.createElement('div');
-                        sourceDiv.className = 'source-file';
+                        sourceDiv.className = 'source-file source-type-' + (source.sourceType || 'unknown');
                         sourceDiv.onclick = function() {
                             vscode.postMessage({
                                 type: 'openFile',
@@ -713,28 +768,23 @@ How can I help you today?`,
                         const sourceHeader = document.createElement('div');
                         sourceHeader.className = 'source-file-header';
                         
-                        const icon = document.createElement('span');
-                        icon.className = 'source-file-icon';
-                        icon.textContent = '[file]';
-                        sourceHeader.appendChild(icon);
-                        
-                        const pathSpan = document.createElement('span');
-                        pathSpan.textContent = source.path;
-                        sourceHeader.appendChild(pathSpan);
+                        // Use the sourceLabel if available, otherwise fall back to path
+                        const labelSpan = document.createElement('span');
+                        labelSpan.className = 'source-label';
+                        labelSpan.textContent = source.sourceLabel || source.path;
+                        sourceHeader.appendChild(labelSpan);
                         
                         sourceDiv.appendChild(sourceHeader);
-
-                        if (source.lineStart) {
-                            const lines = document.createElement('div');
-                            lines.className = 'source-file-lines';
-                            lines.textContent = 'Lines ' + source.lineStart + '-' + (source.lineEnd || source.lineStart);
-                            sourceDiv.appendChild(lines);
-                        }
 
                         if (source.content) {
                             const code = document.createElement('div');
                             code.className = 'source-file-code';
-                            code.textContent = source.content;
+                            // Truncate long content for display
+                            const maxLen = 500;
+                            const displayContent = source.content.length > maxLen 
+                                ? source.content.substring(0, maxLen) + '...' 
+                                : source.content;
+                            code.textContent = displayContent;
                             sourceDiv.appendChild(code);
                         }
 

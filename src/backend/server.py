@@ -15,7 +15,13 @@ from fastapi.middleware.cors import CORSMiddleware
 import encryption
 import db
 from drive_service import DriveService, extract_file_id_from_url
-from git_service import parse_github_url, fetch_repo_contents, fetch_file_content, should_ingest_file, should_skip_directory
+from git_service import (
+    parse_github_url,
+    fetch_repo_contents,
+    fetch_file_content,
+    should_ingest_file,
+    should_skip_directory,
+)
 from events import emit_event, event_stream
 
 app = FastAPI()
@@ -58,7 +64,7 @@ async def events():
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
-        }
+        },
     )
 
 
@@ -79,6 +85,92 @@ async def emit_event_endpoint(source: str, client_id: str = None):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+# Enhanced system prompt for the onboarding assistant with knowledge of context sources
+ONBOARDING_SYSTEM_PROMPT = """You are Backboard, an intelligent onboarding assistant for TaskFlow - an internal project management API (like mini-Jira).
+
+## TEAM
+- Jack - Tech Lead
+- Karan - Senior Backend Dev  
+- Eldiiar - Frontend Dev
+- Yazdan - Junior Dev (new hire)
+
+## YOUR KNOWLEDGE SOURCES
+You have access to three types of context that explain WHY decisions were made:
+
+### 1. Google Drive Documents (ADRs, Meeting Notes, Memos)
+Contains:
+- ADR-014: Authentication Strategy - Explains why custom auth instead of Auth0 ($15k/mo too expensive)
+- Database Architecture RFC - Raw SQL vs ORM decision (Raw SQL won 3-0 for performance)
+- Eng Team Weekly Sync (Aug 14) - Rate limit set to 47 req/min due to RDS capacity
+- Legal Compliance - GDPR requires HARD deletes, not soft deletes
+- Memo on WRITE/DELETE permissions - Split after data loss incident (PM-2024-03)
+- Post-Mortem PM-2024-06 - Why BLOCKED status was removed (circular dependency caused outage)
+- Security Audit Q4 - GUEST role deprecated due to privilege escalation vulnerability
+
+### 2. Git Commit History
+Shows WHAT changed and WHEN, with commit messages explaining context.
+Key commits include:
+- Rate limiter set to 47 (based on capacity planning)
+- Custom auth implementation (enterprise requirements)
+- BLOCKED status removal (post Q2 outage)
+- WRITE/DELETE permission split (after incident PM-2024-03)
+- Task ID format TF-XXXX-XXXX (customer request)
+
+### 3. Telegram Chat History
+Shows real-time team discussions and decisions:
+- Jan 15: Chicago timezone hardcoded for first customer (Legacy Logistics)
+- Feb 02: Auth0 costs $15k/mo, team decided to build custom auth
+- Mar 03: Yazdan accidentally deleted Project Alpha, led to WRITE/DELETE split
+- May 20: ORM vs Raw SQL vote (3-0 for Raw SQL)
+- Jun 12: BLOCKED status caused infinite loop, removed from enum
+- Jul 28: Story points removed after team voted against estimation
+- Aug 14: Rate limit set to 47 (6% safety buffer from 50)
+- Sep 01: Legal requires hard deletes for GDPR compliance
+- Oct 12: TF-XXXX-XXXX format chosen because UUIDs are hard to read over phone
+- Nov 10: Karan warned not to delete legacy.py (Acme Corp still uses v1)
+- Dec 10: GUEST role deprecated due to security audit findings
+
+## KEY MYSTERIES YOU CAN EXPLAIN
+1. Rate limit 47 req/min - Capacity planning + 6% safety buffer
+2. Custom auth (not Auth0) - $15k/mo too expensive, burns 20% runway
+3. TF-XXXX-XXXX IDs - Easier to read over phone than UUIDs
+4. America/Chicago timezone - First customer (Legacy Logistics) was in Chicago
+5. Raw SQL (not ORM) - 4x faster, team voted 3-0
+6. Legacy v1 API - Acme Corp, Zapier integration, old mobile app still use it
+7. BLOCKED status removed - Caused infinite recursion during Q2 outage
+8. WRITE/DELETE split - After Yazdan accidentally deleted production data
+9. Hard deletes - GDPR Article 17 compliance
+10. Story points removed - Team voted against estimation in retro
+11. GUEST role deprecated - Security audit found privilege escalation
+
+## HOW TO RESPOND
+- When asked about a decision, cite the specific source (document, commit, or chat)
+- Quote relevant parts from the source material
+- Explain both WHAT happened and WHY
+- If asked about code, reference the relevant file and explain the context
+- Be concise but provide enough context for understanding
+- If you don't have information, say so clearly
+
+## EXAMPLE RESPONSES
+Q: "Why is the rate limit 47?"
+A: "The rate limit of 47 req/min was set based on load testing results. From the Aug 14 meeting notes:
+- K6 load test showed database connection pool exhaustion at 50 req/min
+- Max theoretical throughput was 50, but with ~6% standard deviation
+- Calculation: 50 * 0.94 = 47 requests/min
+- Budget is frozen until Q1 2025, so RDS upgrade isn't possible
+
+Jack pushed this config change the same day. The team specifically noted: 'Do not change this number even if it looks weird.'"
+
+Q: "Who owns the v1 API?"
+A: "Karan owns the legacy v1 API and Zapier integration. From the Telegram chat on Nov 10, when Yazdan asked about deleting legacy.py, Karan responded 'NO. DO NOT TOUCH. Acme Corp still uses v1. Check the migration doc.'
+
+Known v1 clients still active:
+- Acme Corp integration
+- Internal Zapier automation (Karan set this up)
+- Old mobile app (targeting sunset Q3 2025)"
+"""
+
+
 # create_client creates a client with an assistant provided a client with client_id does not already exist
 @app.post("/client")
 async def create_client(client_id: str, api_key: str, status_code=201):
@@ -89,34 +181,11 @@ async def create_client(client_id: str, api_key: str, status_code=201):
         raise HTTPException(status_code=409, detail="Client already exists!")
     # Connect to backboard
     backboard_client = BackboardClient(api_key=api_key)
-    
-    # Create assistant with onboarding-focused instructions
-    onboarding_description = """You are an intelligent onboarding assistant designed to help new team members get up to speed quickly.
 
-Your role is to:
-1. Answer questions about the codebase, architecture, and team processes
-2. Explain technical decisions documented in ADRs (Architecture Decision Records)
-3. Summarize meeting notes and team discussions
-4. Help users understand code structure and find relevant files
-5. Provide context from past incidents and post-mortems
-6. Explain team conventions and best practices
-
-When answering questions:
-- Reference specific documents, files, or conversations when available
-- Provide direct quotes from source materials when helpful
-- Be concise but thorough
-- If you don't have information about something, say so clearly
-
-You have access to:
-- Google Drive documents (meeting notes, documentation, memos)
-- Git repository history and code
-- Team chat conversations (Telegram)
-"""
-    
     # Create assistant
     assistant = await backboard_client.create_assistant(
-        name="Onboarding Assistant",
-        description=onboarding_description,
+        name="Backboard Onboarding Assistant",
+        description=ONBOARDING_SYSTEM_PROMPT,
     )
     # Create entries for db
     encrypted_api_key = encryption.encrypt_api_key(api_key)
@@ -137,25 +206,25 @@ async def update_assistant(client_id: str, name: str = None, description: str = 
     client = db.lookup_client(client_id)
     if not client:
         raise HTTPException(status_code=404, detail="Client does not exist!")
-    
+
     assistant = db.lookup_assistant(client_id)
     if not assistant:
-        raise HTTPException(status_code=404, detail="No assistant found for this client!")
-    
+        raise HTTPException(
+            status_code=404, detail="No assistant found for this client!"
+        )
+
     decrypted_api_key = encryption.decrypt_api_key(client["api_key"])
     backboard_client = BackboardClient(api_key=decrypted_api_key)
-    
+
     updated = await backboard_client.update_assistant(
-        assistant_id=assistant["assistant_id"],
-        name=name,
-        description=description
+        assistant_id=assistant["assistant_id"], name=name, description=description
     )
-    
+
     return {
         "status": "updated",
         "assistant_id": updated.assistant_id,
         "name": updated.name,
-        "description": updated.description
+        "description": updated.description,
     }
 
 
@@ -165,19 +234,21 @@ async def upload_content(client_id: str, content: str, title: str = "Uploaded Co
     """Upload text content directly to the assistant's knowledge base."""
     import tempfile
     import os as upload_os
-    
+
     client = db.lookup_client(client_id)
     if not client:
         raise HTTPException(status_code=404, detail="Client does not exist!")
-    
+
     assistant = db.lookup_assistant(client_id)
     if not assistant:
-        raise HTTPException(status_code=404, detail="No assistant found for this client!")
-    
+        raise HTTPException(
+            status_code=404, detail="No assistant found for this client!"
+        )
+
     decrypted_api_key = encryption.decrypt_api_key(client["api_key"])
     backboard_client = BackboardClient(api_key=decrypted_api_key)
     assistant_id = assistant["assistant_id"]
-    
+
     # Create a temporary file with the content
     temp_file_path = None
     try:
@@ -186,16 +257,16 @@ async def upload_content(client_id: str, content: str, title: str = "Uploaded Co
         ) as temp_file:
             temp_file.write(f"# {title}\n\n{content}")
             temp_file_path = temp_file.name
-        
+
         # Upload to assistant
         document = await backboard_client.upload_document_to_assistant(
             assistant_id, temp_file_path
         )
-        
+
         return {
             "status": "uploaded",
             "document_id": str(document.document_id),
-            "title": title
+            "title": title,
         }
     finally:
         if temp_file_path and upload_os.path.exists(temp_file_path):
@@ -221,16 +292,14 @@ async def add_thread(client_id: str, content: str, status_code=201):
     output = []
     sources = []
     async for chunk in await backboard_client.add_message(
-        thread_id=thread.thread_id,
-        content=content,
-        memory="auto",
-        stream=True
+        thread_id=thread.thread_id, content=content, memory="auto", stream=True
     ):
         print(chunk)
-        if chunk['type'] == 'content_streaming':
-            output.append(chunk['content'])
+        if chunk["type"] == "content_streaming":
+            output.append(chunk["content"])
     output = "".join(output)
     return output
+
 
 # query sends backboards response along with sources of information
 @app.post("/messages/query")
@@ -251,27 +320,24 @@ async def query(client_id: str, content: str, status_code=201):
     output = []
     sources = []
     async for chunk in await backboard_client.add_message(
-        thread_id=thread.thread_id,
-        content=content,
-        memory="auto",
-        stream=True
+        thread_id=thread.thread_id, content=content, memory="auto", stream=True
     ):
         print(chunk)
-        if chunk['type'] == 'content_streaming':
-            output.append(chunk['content'])
-            print(chunk['content'])
-      #  elif chunk['type'] == 'memory_retrieved':
-      #      print(chunk['memories'])
-      #      sources.append(chunk['memories'][0]['memory'])
-        elif chunk['type'] == 'run_ended' and chunk.get("retrieved_memories", None):
-            memories = chunk['retrieved_memories']
+        if chunk["type"] == "content_streaming":
+            output.append(chunk["content"])
+            print(chunk["content"])
+        #  elif chunk['type'] == 'memory_retrieved':
+        #      print(chunk['memories'])
+        #      sources.append(chunk['memories'][0]['memory'])
+        elif chunk["type"] == "run_ended" and chunk.get("retrieved_memories", None):
+            memories = chunk["retrieved_memories"]
             for memory in memories:
-                sources.append(memory['memory'])
-        #elif chunk['type'] == 'run_ended' and chunk.get('memory_operation_id', None):
+                sources.append(memory["memory"])
+        # elif chunk['type'] == 'run_ended' and chunk.get('memory_operation_id', None):
         #    print(chunk['memory_operation_id'])
         #    memory_operation_id = chunk['memory_operation_id']
-    #memory = await backboard_client.add_memory(assistant_id=assistant_id, content=content)
-    #memory_id = memory["memory_id"]
+    # memory = await backboard_client.add_memory(assistant_id=assistant_id, content=content)
+    # memory_id = memory["memory_id"]
     # for debugging
     # print(f"Memory id is {memory_id}")
     # goal is to check what methods the object has
@@ -280,13 +346,14 @@ async def query(client_id: str, content: str, status_code=201):
     # print(f"All memories {memories}")
     # for method in methods:
     #    print(f"Method found! {method}")
-    #await backboard_client.get_memory(assistant_id=assistant_id, memory_id=memory_id)
+    # await backboard_client.get_memory(assistant_id=assistant_id, memory_id=memory_id)
     output = "".join(output)
     print(sources)
     return (output, sources)
 
-#@app.post("/messages/summarize")
-#async def summarize(client_id: str, status_code=201):
+
+# @app.post("/messages/summarize")
+# async def summarize(client_id: str, status_code=201):
 #    content = "Summarize all the memories that you have"
 #    return await add_thread(client_id=client_id, content=content)
 
@@ -452,6 +519,7 @@ async def get_drive_documents(client_id: str):
         "documents": documents,
     }
 
+
 @app.get("/system/status")
 async def get_system_status(client_id: str = "default_user"):
     """
@@ -459,31 +527,29 @@ async def get_system_status(client_id: str = "default_user"):
     """
     client = db.lookup_client(client_id)
     drive_docs = db.get_all_drive_documents_for_client(client_id)
-    
+
     # Check if telegram bot is running (simplified placeholder)
     # In a real app, this would check a process or heartbeat
-    telegram_connected = False 
-    
+    telegram_connected = False
+
     return {
         "client": {
             "id": client_id,
             "exists": client is not None,
-            "has_api_key": client is not None and client.get("api_key") is not None
+            "has_api_key": client is not None and client.get("api_key") is not None,
         },
         "drive": {
             "connected": len(drive_docs) > 0,
             "document_count": len(drive_docs),
-            "lastUpdated": drive_docs[0]["updated_at"] if drive_docs else None
+            "lastUpdated": drive_docs[0]["updated_at"] if drive_docs else None,
         },
-        "telegram": {
-            "connected": telegram_connected,
-            "lastUpdated": None
-        },
+        "telegram": {"connected": telegram_connected, "lastUpdated": None},
         "codebase": {
-            "connected": True, # Placeholder for demo
-            "lastUpdated": "2026-01-12 10:00 UTC" # Placeholder
-        }
+            "connected": True,  # Placeholder for demo
+            "lastUpdated": "2026-01-12 10:00 UTC",  # Placeholder
+        },
     }
+
 
 @app.get("/activity")
 async def get_activity(client_id: str = "default_user", limit: int = 10):
@@ -498,15 +564,15 @@ async def get_activity(client_id: str = "default_user", limit: int = 10):
             "title": f"Document '{doc['file_name']}' synced",
             "summary": f"Extracted context from {doc['file_name']}",
             "time": doc["updated_at"],
-            "color": "emerald"
+            "color": "emerald",
         }
         for doc in docs
     ]
-    
+
     # Get recent chat updates (simplified)
     # In a real app we'd query the chats table for timestamps
     # For now, let's keep it simple or use mocks if table empty
-    
+
     return sorted(drive_activity, key=lambda x: x["time"], reverse=True)[:limit]
 
 
@@ -564,7 +630,9 @@ async def register_git_repository(client_id: str, repo_url: str, status_code=201
             if response.status_code == 201:
                 webhook_created = True
             else:
-                webhook_error = f"GitHub API returned {response.status_code}: {response.text}"
+                webhook_error = (
+                    f"GitHub API returned {response.status_code}: {response.text}"
+                )
         except Exception as e:
             webhook_error = str(e)
 
@@ -675,4 +743,170 @@ async def git_webhook(request: Request):
         "repo_url": repo_url,
         "files_updated": len(changed_files),
         "files": [f[0] for f in changed_files],
+    }
+
+
+# Load all context files (drive.txt, git.txt, telegram.txt) into assistant's knowledge base
+@app.post("/context/load")
+async def load_context_files(client_id: str, status_code=201):
+    """
+    Load the three context files (drive.txt, git.txt, telegram.txt) into the assistant's knowledge base.
+    These files contain the historical context about team decisions, discussions, and code changes.
+
+    Args:
+        client_id: The client ID
+    """
+    import tempfile
+    import os as load_os
+
+    client = db.lookup_client(client_id)
+    if not client:
+        raise HTTPException(status_code=404, detail="Client does not exist!")
+
+    assistant = db.lookup_assistant(client_id)
+    if not assistant:
+        raise HTTPException(
+            status_code=404, detail="No assistant found for this client!"
+        )
+
+    decrypted_api_key = encryption.decrypt_api_key(client["api_key"])
+    backboard_client = BackboardClient(api_key=decrypted_api_key)
+    assistant_id = assistant["assistant_id"]
+
+    # Define the context files and their metadata
+    # Files are relative to the project root (two levels up from backend)
+    current_dir = load_os.path.dirname(load_os.path.abspath(__file__))
+    project_root = load_os.path.dirname(load_os.path.dirname(current_dir))
+
+    context_files = [
+        {
+            "filename": "drive.txt",
+            "path": load_os.path.join(project_root, "drive.txt"),
+            "title": "Google Drive Documents - ADRs, Meeting Notes, Memos, Legal & Security Docs",
+            "source": "Google Drive",
+        },
+        {
+            "filename": "git.txt",
+            "path": load_os.path.join(project_root, "git.txt"),
+            "title": "Git Commit History - Code Changes and Context",
+            "source": "Git Repository",
+        },
+        {
+            "filename": "telegram.txt",
+            "path": load_os.path.join(project_root, "telegram.txt"),
+            "title": "Telegram Chat History - Team Discussions and Decisions",
+            "source": "Telegram",
+        },
+    ]
+
+    uploaded_files = []
+    errors = []
+
+    for ctx_file in context_files:
+        try:
+            # Check if file exists
+            if not load_os.path.exists(ctx_file["path"]):
+                errors.append(f"File not found: {ctx_file['filename']}")
+                continue
+
+            # Read the file content
+            with open(ctx_file["path"], "r", encoding="utf-8") as f:
+                content = f.read()
+
+            # Create a temporary file with header and content
+            temp_file_path = None
+            try:
+                with tempfile.NamedTemporaryFile(
+                    mode="w", suffix=".txt", delete=False, encoding="utf-8"
+                ) as temp_file:
+                    # Write content with metadata header
+                    header = f"""# {ctx_file['title']}
+Source: {ctx_file['source']}
+File: {ctx_file['filename']}
+
+{'='*60}
+
+"""
+                    temp_file.write(header + content)
+                    temp_file_path = temp_file.name
+
+                # Upload to assistant
+                print(f"Uploading {ctx_file['filename']} to Backboard...")
+                document = await backboard_client.upload_document_to_assistant(
+                    assistant_id, temp_file_path
+                )
+
+                # Wait for document to be indexed
+                print(f"Waiting for {ctx_file['filename']} to be indexed...")
+                import time
+
+                max_wait_time = 60
+                start_time = time.time()
+
+                while time.time() - start_time < max_wait_time:
+                    status = await backboard_client.get_document_status(
+                        document.document_id
+                    )
+                    if status.status == "indexed":
+                        print(f"[OK] {ctx_file['filename']} indexed successfully")
+                        uploaded_files.append(
+                            {
+                                "filename": ctx_file["filename"],
+                                "document_id": str(document.document_id),
+                                "source": ctx_file["source"],
+                            }
+                        )
+                        break
+                    elif status.status == "failed":
+                        errors.append(
+                            f"{ctx_file['filename']}: Indexing failed - {status.status_message}"
+                        )
+                        break
+                    await asyncio.sleep(2)
+                else:
+                    errors.append(f"{ctx_file['filename']}: Indexing timed out")
+
+            finally:
+                if temp_file_path and load_os.path.exists(temp_file_path):
+                    load_os.remove(temp_file_path)
+
+        except Exception as e:
+            errors.append(f"{ctx_file['filename']}: {str(e)}")
+            print(f"Error uploading {ctx_file['filename']}: {e}")
+
+    # Emit event to notify frontend
+    await emit_event("drive", client_id)
+
+    return {
+        "status": "completed",
+        "uploaded": uploaded_files,
+        "errors": errors,
+        "message": f"Loaded {len(uploaded_files)}/3 context files",
+    }
+
+
+# Get current context status for a client
+@app.get("/context/status")
+async def get_context_status(client_id: str):
+    """
+    Get the status of loaded context files for a client.
+    """
+    client = db.lookup_client(client_id)
+    if not client:
+        raise HTTPException(status_code=404, detail="Client does not exist!")
+
+    assistant = db.lookup_assistant(client_id)
+    if not assistant:
+        raise HTTPException(
+            status_code=404, detail="No assistant found for this client!"
+        )
+
+    return {
+        "client_id": client_id,
+        "assistant_id": assistant["assistant_id"],
+        "context_sources": [
+            {"name": "Google Drive", "type": "drive.txt", "status": "available"},
+            {"name": "Git Repository", "type": "git.txt", "status": "available"},
+            {"name": "Telegram", "type": "telegram.txt", "status": "available"},
+        ],
     }
