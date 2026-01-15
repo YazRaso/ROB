@@ -687,15 +687,6 @@ async def git_webhook(request: Request):
         ):
             pass  # Just consume the stream
 
-    # Log activity for dashboard
-    db.log_activity(
-        client_id=client_id,
-        source="GitHub",
-        title=f"New push to {repo}",
-        summary=f"Processed {len(changed_files)} files: {', '.join([f[0] for f in changed_files[:3]])}{'...' if len(changed_files) > 3 else ''}",
-        color="blue"
-    )
-
     # Emit event to notify frontend of repo update
     await emit_event("repo", client_id)
 
