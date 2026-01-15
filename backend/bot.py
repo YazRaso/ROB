@@ -45,7 +45,6 @@ async def log_thread(update: Update, context: ContextTypes.DEFAULT_TYPE):
     db.create_thread(chat.id, msg.chat, thread)
 
     # Notify frontend of new telegram message
-    await emit_telegram_event()
 
 
 app = ApplicationBuilder().token(BOT_TOKEN).build()
