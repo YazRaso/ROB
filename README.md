@@ -1,4 +1,4 @@
-# McHacks Onboarding Assistant
+# ROB - Real-time onboarding w Backboard
 
 An intelligent onboarding assistant that integrates with Google Drive, Telegram, and GitHub to help new team members get up to speed quickly using Backboard AI.
 

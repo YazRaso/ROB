@@ -18,7 +18,7 @@ async def main():
     """Main demonstration workflow."""
 
     # Configuration
-    base_url = "http://localhost:8000"
+    base_url = "https://rob-production.up.railway.app/"
     client_id = "demo_company"
     backboard_api_key = input("Enter your Backboard API key: ").strip()
 

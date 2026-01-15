@@ -20,8 +20,9 @@ from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-import db
+from src.backend import db
 from backboard import BackboardClient
+
 
 # Scopes required for reading Google Drive files
 SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
@@ -268,6 +269,20 @@ Link: {metadata.get('webViewLink', 'N/A')}
                     content=content,
                 )
             print(f"Document saved to database: {file_id}")
+
+            # Log activity for dashboard
+            db.log_activity(
+                client_id=client_id,
+                source="Drive",
+                title=f"Document '{metadata['name']}' synced",
+                summary=f"Indexed {len(content.split())} words and extracted key insights",
+                color="emerald"
+            )
+
+            # Emit event to notify frontend (though drive_service doesn't have emit_event imported, server calls it)
+            # Actually, we should probably emit here too if this runs in a background task
+            from src.backend.events import emit_event
+            await emit_event("drive", client_id)
 
         except Exception as e:
             print(f"Error processing document: {e}")

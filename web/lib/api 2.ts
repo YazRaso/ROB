@@ -1,9 +1,9 @@
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://rob-production.up.railway.app/";
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
-export type ActivitySource = "drive" | "repo" | "telegram";
+export type EventSource = "drive" | "repo" | "telegram";
 
 export interface DataEvent {
-    source: ActivitySource;
+    source: EventSource;
     timestamp: string;
     client_id?: string;
 }

@@ -6,30 +6,35 @@ import SourceStatus from "./SourceStatus";
 import { API } from "../lib/api";
 
 export default function ConnectedClient() {
-  const [demoEnabled, setDemoEnabled] = useState(true);
+  const [demoEnabled, setDemoEnabled] = useState(false);
   const [status, setStatus] = useState<any>(null);
 
   useEffect(() => {
-    if (!demoEnabled) {
+    const fetchStatus = () => {
       API.getStatus().then(setStatus).catch(console.error);
-    }
-  }, [demoEnabled]);
+    };
+
+    fetchStatus();
+    // Refresh status every 30 seconds
+    const interval = setInterval(fetchStatus, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   const drive = demoEnabled
     ? { connected: true, lastUpdated: "2026-01-12 12:20 UTC" }
-    : { connected: status?.drive?.connected, lastUpdated: status?.drive?.lastUpdated };
+    : { connected: status?.drive?.connected, lastUpdated: status?.drive?.lastUpdated || "Never" };
 
   const codebase = demoEnabled
     ? { connected: true, lastUpdated: "2026-01-12 12:20 UTC" }
-    : { connected: status?.codebase?.connected, lastUpdated: status?.codebase?.lastUpdated };
+    : { connected: status?.codebase?.connected, lastUpdated: status?.codebase?.lastUpdated || "Never" };
 
   const telegram = demoEnabled
     ? { connected: false }
-    : { connected: status?.telegram?.connected, lastUpdated: status?.telegram?.lastUpdated };
+    : { connected: status?.telegram?.connected, lastUpdated: status?.telegram?.lastUpdated || "Never" };
 
   const summarizer = {
     status: (demoEnabled ? "ok" : (status?.client?.exists ? "ok" : "idle")) as "ok" | "idle",
-    lastRun: demoEnabled ? "2026-01-12 12:20 UTC" : status?.drive?.lastUpdated,
+    lastRun: demoEnabled ? "2026-01-12 12:20 UTC" : (status?.drive?.lastUpdated || "Never"),
   };
 
   return (
