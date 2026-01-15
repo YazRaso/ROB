@@ -121,34 +121,21 @@ async def create_client(client_id: str, api_key: str, status_code=201):
     tools = get_backboard_tools()
     assistant = await backboard_client.create_assistant(
         name="ROB",
-        description="""You are ROB, an engineering onboarding assistant for this team and codebase.
+        description="""You are ROB, an engineering onboarding assistant. Talk like a sharp senior engineer: confident, concise, slightly informal.
 
-STYLE:
-- Talk like a sharp senior engineer: confident, concise, slightly informal.
-- Lead with the answer in 1–2 sentences, then give a short explanation.
+RULES:
+1. **Be specific**: If context has a number, name, or date, state it exactly. Name the people involved.
+   - "Jack asked Karan to hardcode timezone to Chicago in January 2025. [Source: Telegram]"
 
-ABSOLUTE RULES:
-1. If context gives you a specific number, name, date, or decision, say it **exactly** and **name the people involved**.
-   - Example: "Jack asked Karan to hard‑code the timezone to Chicago in January 2025 for a specific client. [Source: Telegram]".
+2. **Cite sources**: Every fact from context ends with [Source: Drive/Telegram/Git/Code]. Multiple sources = [Sources: Drive, Telegram].
 
-2. Every factual statement that comes from context ends with a source tag:
-   - "[Source: Drive]", "[Source: Telegram]", "[Source: Git]", or "[Source: Code]".
-   - If multiple sources agree, use "[Sources: Drive, Telegram]".
+3. **Answer "I/my" questions about the user**: Use "you" (don't invent a name). If they ask "What permissions do I have?", tell them what they can/cannot do based on context.
 
-3. Answer the user's question **about them** when they say "I" or "my".
-   - Use second person ("you") without inventing a name for the user.
-   - For "What permissions do I have in the database?": say what **you** (the user) can and cannot do, based on how the role is described in context, not just generic policy.
+4. **No hedging when context is clear**: Say "is 47" not "might be around 47". Only hedge if info is missing: "I don't see this documented. [No source found]"
 
-4. Do NOT hedge when the context is clear.
-   - Avoid "might", "maybe", "likely" if the documents are explicit.
-   - Only hedge if the info truly isn't in context, and say so: "I don't see this documented. [No source found]".
+5. **Use tools**: `get_recent_context` for "what changed while I was away", `create_file` for docs, `generate_mermaid_graph` for diagrams.
 
-TOOLS:
-- Use `get_recent_context` when the user asks "what changed while I was away" or similar.
-- Use `create_file` to generate onboarding docs or runbooks.
-- Use `generate_mermaid_graph` when a diagram would clarify a flow or decision history.
-
-Always prefer being specific, named, and sourced over being vague or generic.""",
+Lead with the answer, then explain. Be specific, named, and sourced.""",
         tools=tools,
     )
     # Create entries for db
@@ -380,10 +367,10 @@ async def query(client_id: str, content: str, status_code=201):
         response_run_id = response.run_id if hasattr(response, "run_id") else response.get("run_id") if isinstance(response, dict) else None
 
         final_response = response
+        tool_outputs = []  # Initialize to handle cases where no tools are called
 
         # If Backboard requested tool calls, execute them and submit outputs
         if response_status == "REQUIRES_ACTION" and response_tool_calls:
-            tool_outputs = []
 
             for tc in response_tool_calls:
                 # Handle both dict and object tool call structures
@@ -498,7 +485,18 @@ async def query(client_id: str, content: str, status_code=201):
         if content_value is None:
             content_value = str(final_response)
 
-        return (content_value, sources)
+        # Extract tool results if any tools were executed
+        tool_results = []
+        if tool_outputs:
+            for tool_output in tool_outputs:
+                try:
+                    result = json.loads(tool_output["output"])
+                    if result.get("tool") == "create_file":
+                        tool_results.append(result)
+                except (json.JSONDecodeError, KeyError):
+                    pass
+
+        return (content_value, sources, tool_results if tool_results else [])
 
     except BackboardAPIError as e:
         msg = (
