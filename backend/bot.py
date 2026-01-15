@@ -13,7 +13,6 @@ from telegram.ext import (
     ContextTypes,
     filters,
 )
-from src.backend import db
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 SERVER_URL = os.getenv("SERVER_URL", "https://rob-production.up.railway.app/")
