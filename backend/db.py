@@ -27,6 +27,21 @@ def get_connection():
     return conn
 
 
+# telegram
+def get_client_with_bot_token(bot_token: str):
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT * FROM telegram_clients WHERE bot_token = %s
+        """,
+        (bot_token,),
+    )
+    client = cur.fetchone()
+    cur.close()
+    conn.close()
+    return dict(client) if client else None
+
 # Client functions
 def lookup_client(client_id: str):
     conn = get_connection()

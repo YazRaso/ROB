@@ -13,6 +13,7 @@ from telegram.ext import (
     ContextTypes,
     filters,
 )
+import db
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 SERVER_URL = os.getenv("SERVER_URL", "https://rob-production.up.railway.app/")
@@ -41,10 +42,15 @@ async def log_thread(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = msg.chat
     sender = msg.from_user or msg.sender_chat
     thread = f"{sender.username}: {msg.text}"
-    # For testing purposes print(f"Thread to be added: {thread}, with id: {chat.id}, channel name: {chat.title}")
-    db.create_thread(chat.id, msg.chat, thread)
+    print(f"Message received from {sender.username}")
+    client_id = db.get_client_with_bot_token(BOT_TOKEN)
+    import requests
+    parmas = {
+        "client_id": client_id,
+        "content": content
+    }
+    requests.post(f"{SERVER_URL}/messages/send", params=params)
 
-    # Notify frontend of new telegram message
 
 
 app = ApplicationBuilder().token(BOT_TOKEN).build()
