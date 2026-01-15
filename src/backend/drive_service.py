@@ -15,7 +15,6 @@ import asyncio
 import hashlib
 from datetime import datetime
 from typing import Optional, Dict, List
-from dotenv import load_dotenv
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -23,9 +22,6 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 import db
 from backboard import BackboardClient
-import encryption
-
-load_dotenv()
 
 # Scopes required for reading Google Drive files
 SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
@@ -194,9 +190,7 @@ class DriveService:
                 print(f"Client {client_id} not found")
                 return
 
-            # Decrypt API key
-            decrypted_api_key = encryption.decrypt_api_key(client["api_key"])
-            backboard_client = BackboardClient(api_key=decrypted_api_key)
+            backboard_client = BackboardClient(api_key=client["api_key"])
 
             # Get assistant
             assistant = db.lookup_assistant(client_id)

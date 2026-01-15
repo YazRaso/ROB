@@ -9,7 +9,6 @@ from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Any
 from backboard import BackboardClient
 import db
-import encryption
 
 
 # Backboard tool definitions in JSON schema format

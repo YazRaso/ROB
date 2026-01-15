@@ -12,7 +12,6 @@ from backboard import BackboardClient
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
-import encryption
 import db
 from drive_service import DriveService, extract_file_id_from_url
 from git_service import parse_github_url, fetch_repo_contents, fetch_file_content, should_ingest_file, should_skip_directory
@@ -103,9 +102,8 @@ async def create_client(client_id: str, api_key: str, status_code=201):
         tools=tools
     )
     # Create entries for db
-    encrypted_api_key = encryption.encrypt_api_key(api_key)
     db.create_assistant(assistant.assistant_id, client_id)
-    db.create_client(client_id, encrypted_api_key)
+    db.create_client(client_id, api_key)
 
     return {
         "status": "created",
@@ -123,15 +121,14 @@ async def add_thread(client_id: str, content: str, status_code=201):
     if not client:
         raise HTTPException(status_code=404, detail="Client does not exist!")
     # For simplicity, we assume that each client has one assistant
-    decrypted_api_key = encryption.decrypt_api_key(client["api_key"])
-    backboard_client = BackboardClient(api_key=decrypted_api_key)
+    backboard_client = BackboardClient(api_key=client["api_key"])
     assistant = db.lookup_assistant(client_id)
     if not assistant:
         raise HTTPException(
             status_code=404, detail="No assistant found for this client!"
         )
     assistant_id = assistant["assistant_id"]
-    
+
     # Create thread and send message
     thread = await backboard_client.create_thread(assistant_id)
     response = await backboard_client.add_message(
@@ -243,8 +240,7 @@ async def query(client_id: str, content: str, status_code=201):
     if not client:
         raise HTTPException(status_code=404, detail="Client does not exist!")
     # For simplicity, we assume that each client has one assistant
-    decrypted_api_key = encryption.decrypt_api_key(client["api_key"])
-    backboard_client = BackboardClient(api_key=decrypted_api_key)
+    backboard_client = BackboardClient(api_key=client["api_key"])
     assistant = db.lookup_assistant(client_id)
     if not assistant:
         raise HTTPException(
@@ -653,8 +649,7 @@ async def git_webhook(request: Request):
         return {"status": "ignored", "reason": "No ingestable files changed"}
 
     # Send to Backboard memory
-    decrypted_api_key = encryption.decrypt_api_key(client["api_key"])
-    backboard_client = BackboardClient(api_key=decrypted_api_key)
+    backboard_client = BackboardClient(api_key=client["api_key"])
     assistant = db.lookup_assistant(client_id)
     if not assistant:
         return {"status": "error", "reason": "No assistant found"}
@@ -730,9 +725,8 @@ async def create_file_tool(
     
     # Use the sanitized filename
     sanitized_filename = normalized_path.replace('\\', '/')  # Normalize to forward slashes
-    
-    decrypted_api_key = encryption.decrypt_api_key(client["api_key"])
-    backboard_client = BackboardClient(api_key=decrypted_api_key)
+
+    backboard_client = BackboardClient(api_key=client["api_key"])
     assistant = db.lookup_assistant(client_id)
     if not assistant:
         raise HTTPException(status_code=404, detail="No assistant found!")
@@ -757,13 +751,12 @@ async def get_recent_context_tool(
     client = db.lookup_client(client_id)
     if not client:
         raise HTTPException(status_code=404, detail="Client does not exist!")
-    
-    decrypted_api_key = encryption.decrypt_api_key(client["api_key"])
-    backboard_client = BackboardClient(api_key=decrypted_api_key)
+
+    backboard_client = BackboardClient(api_key=client["api_key"])
     assistant = db.lookup_assistant(client_id)
     if not assistant:
         raise HTTPException(status_code=404, detail="No assistant found!")
-    
+
     result = await handle_get_recent_context(
         client_id, backboard_client, assistant["assistant_id"], hours
     )
@@ -784,13 +777,12 @@ async def generate_mermaid_graph_tool(
     client = db.lookup_client(client_id)
     if not client:
         raise HTTPException(status_code=404, detail="Client does not exist!")
-    
-    decrypted_api_key = encryption.decrypt_api_key(client["api_key"])
-    backboard_client = BackboardClient(api_key=decrypted_api_key)
+
+    backboard_client = BackboardClient(api_key=client["api_key"])
     assistant = db.lookup_assistant(client_id)
     if not assistant:
         raise HTTPException(status_code=404, detail="No assistant found!")
-    
+
     result = await handle_generate_mermaid_graph(
         client_id, topic, backboard_client, assistant["assistant_id"]
     )
