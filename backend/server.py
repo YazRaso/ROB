@@ -157,7 +157,8 @@ Eliminate the need for the user to ask questions twice. Be proactive, brief, and
 @app.post("/client/upload-content")
 async def upload_content(
     client_id: str,
-    content: str = Body(...),
+    # Read raw text content from the request body as plain text
+    content: str = Body(..., media_type="text/plain"),
     title: str = "Uploaded Content",
 ):
     """Upload text content directly to the assistant's knowledge base."""
