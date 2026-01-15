@@ -142,83 +142,99 @@ async def add_thread(client_id: str, content: str, status_code=201):
     )
     
     # Check if Backboard requires tool calls
-    if hasattr(response, 'status') and getattr(response, 'status', None) == "REQUIRES_ACTION":
-        tool_calls = getattr(response, 'tool_calls', None)
-        if tool_calls:
-            tool_outputs = []
-            
-            # Process each tool call
-            for tc in tool_calls:
+    # Handle both dict and object response structures
+    response_status = response.status if hasattr(response, 'status') else response.get('status') if isinstance(response, dict) else None
+    response_tool_calls = response.tool_calls if hasattr(response, 'tool_calls') else response.get('tool_calls') if isinstance(response, dict) else None
+    response_run_id = response.run_id if hasattr(response, 'run_id') else response.get('run_id') if isinstance(response, dict) else None
+    
+    if response_status == "REQUIRES_ACTION" and response_tool_calls:
+        tool_outputs = []
+        
+        # Process each tool call
+        for tc in response_tool_calls:
+            # Handle both dict and object tool call structures
+            if isinstance(tc, dict):
+                tc_function = tc.get('function', {})
+                tool_name = tc_function.get('name') if isinstance(tc_function, dict) else None
+                args = tc_function.get('parsed_arguments', {}) if isinstance(tc_function, dict) else {}
+                tc_id = tc.get('id')
+            else:
                 if not hasattr(tc, 'function'):
                     continue
-                    
-                tool_name = tc.function.name
+                tool_name = tc.function.name if hasattr(tc.function, 'name') else None
                 args = getattr(tc.function, 'parsed_arguments', {})
-                
-                try:
-                    # Execute the appropriate tool
-                    if tool_name == "create_file":
-                        filename = args.get("filename", "docs/ONBOARDING.md")
-                        result = await handle_create_file(
-                            client_id, filename, backboard_client, assistant_id, user_query=content
-                        )
-                        tool_outputs.append({
-                            "tool_call_id": tc.id,
-                            "output": json.dumps(result)
-                        })
-                        
-                    elif tool_name == "get_recent_context":
-                        hours = args.get("hours", 24)
-                        result = await handle_get_recent_context(
-                            client_id, backboard_client, assistant_id, hours
-                        )
-                        tool_outputs.append({
-                            "tool_call_id": tc.id,
-                            "output": json.dumps(result)
-                        })
-                        
-                    elif tool_name == "generate_mermaid_graph":
-                        topic = args.get("topic", "feature lineage")
-                        result = await handle_generate_mermaid_graph(
-                            client_id, topic, backboard_client, assistant_id
-                        )
-                        tool_outputs.append({
-                            "tool_call_id": tc.id,
-                            "output": json.dumps(result)
-                        })
-                    else:
-                        # Unknown tool - return error
-                        tool_outputs.append({
-                            "tool_call_id": tc.id,
-                            "output": json.dumps({"error": f"Unknown tool: {tool_name}"})
-                        })
-                except Exception as e:
-                    # Tool execution failed - return error
-                    print(f"Error executing tool {tool_name}: {e}")
-                    tool_outputs.append({
-                        "tool_call_id": tc.id,
-                        "output": json.dumps({"error": f"Tool execution failed: {str(e)}"})
-                    })
+                tc_id = tc.id if hasattr(tc, 'id') else None
             
-            # Submit tool outputs back to Backboard
-            if tool_outputs:
-                try:
-                    run_id = getattr(response, 'run_id', None)
-                    if not run_id:
-                        raise ValueError("Response missing run_id")
-                    
-                    final_response = await backboard_client.submit_tool_outputs(
-                        thread_id=thread.thread_id,
-                        run_id=run_id,
-                        tool_outputs=tool_outputs
+            if not tool_name or not tc_id:
+                continue
+            
+            try:
+                # Execute the appropriate tool
+                if tool_name == "create_file":
+                    filename = args.get("filename", "docs/ONBOARDING.md") if isinstance(args, dict) else getattr(args, 'get', lambda k, d: d)("filename", "docs/ONBOARDING.md")
+                    result = await handle_create_file(
+                        client_id, filename, backboard_client, assistant_id, user_query=content
                     )
-                    return getattr(final_response, 'content', str(final_response))
-                except Exception as e:
-                    print(f"Error submitting tool outputs: {e}")
-                    return {"error": f"Failed to submit tool outputs: {str(e)}"}
+                    tool_outputs.append({
+                        "tool_call_id": tc_id,
+                        "output": json.dumps(result)
+                    })
+                    
+                elif tool_name == "get_recent_context":
+                    hours = args.get("hours", 24) if isinstance(args, dict) else getattr(args, 'get', lambda k, d: d)("hours", 24)
+                    result = await handle_get_recent_context(
+                        client_id, backboard_client, assistant_id, hours
+                    )
+                    tool_outputs.append({
+                        "tool_call_id": tc_id,
+                        "output": json.dumps(result)
+                    })
+                    
+                elif tool_name == "generate_mermaid_graph":
+                    topic = args.get("topic", "feature lineage") if isinstance(args, dict) else getattr(args, 'get', lambda k, d: d)("topic", "feature lineage")
+                    result = await handle_generate_mermaid_graph(
+                        client_id, topic, backboard_client, assistant_id
+                    )
+                    tool_outputs.append({
+                        "tool_call_id": tc_id,
+                        "output": json.dumps(result)
+                    })
+                else:
+                    # Unknown tool - return error
+                    tool_outputs.append({
+                        "tool_call_id": tc_id,
+                        "output": json.dumps({"error": f"Unknown tool: {tool_name}"})
+                    })
+            except Exception as e:
+                # Tool execution failed - return error
+                print(f"Error executing tool {tool_name}: {e}")
+                import traceback
+                traceback.print_exc()
+                tool_outputs.append({
+                    "tool_call_id": tc_id,
+                    "output": json.dumps({"error": f"Tool execution failed: {str(e)}"})
+                })
+        
+        # Submit tool outputs back to Backboard
+        if tool_outputs:
+            try:
+                if not response_run_id:
+                    raise ValueError("Response missing run_id")
+                
+                final_response = await backboard_client.submit_tool_outputs(
+                    thread_id=thread.thread_id,
+                    run_id=response_run_id,
+                    tool_outputs=tool_outputs
+                )
+                return final_response.content if hasattr(final_response, 'content') else final_response.get('content') if isinstance(final_response, dict) else str(final_response)
+            except Exception as e:
+                print(f"Error submitting tool outputs: {e}")
+                import traceback
+                traceback.print_exc()
+                return {"error": f"Failed to submit tool outputs: {str(e)}"}
     
     # Normal response (no tool calls needed)
-    return getattr(response, 'content', str(response))
+    return response.content if hasattr(response, 'content') else response.get('content') if isinstance(response, dict) else str(response)
 
 # query sends backboards response along with sources of information
 @app.post("/messages/query")

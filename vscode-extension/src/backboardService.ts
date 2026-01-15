@@ -7,6 +7,12 @@ export interface ChatMessage {
     timestamp: number;
     sources?: SourceFile[];
     context?: FileContext;
+    toolResult?: {
+        type: string;
+        filename?: string;
+        content?: string;
+        [key: string]: any;
+    };
 }
 
 export interface SourceFile {

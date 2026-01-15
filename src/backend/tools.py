@@ -81,7 +81,7 @@ def detect_tool_invocation(content: str) -> Optional[str]:
     
     Returns the tool name if found, None otherwise.
     """
-    # Match patterns like @create_file (no quotes required)
+    # Match patterns like @create_file
     pattern = r'@(\w+)'
     match = re.search(pattern, content)
     if match:
@@ -116,7 +116,7 @@ Generate the complete file content now:"""
         output = []
         async for chunk in await backboard_client.add_message(
             thread_id=thread.thread_id,
-            content=generation_prompt,
+            contbutent=generation_prompt,
             memory="auto",
             stream=True
         ):
