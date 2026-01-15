@@ -21,20 +21,6 @@ if not DATABASE_URL:
     raise ValueError("DATABASE_URL environment variable is required")
 
 
-cur.execute(
-    """
-    CREATE TABLE IF NOT EXISTS activity_log (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        client_id TEXT,
-        source TEXT,
-        title TEXT,
-        summary TEXT,
-        color TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )
-"""
-)
-
 def get_connection():
     """Get a new database connection with RealDictCursor."""
     conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
