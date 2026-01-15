@@ -9,6 +9,11 @@ An intelligent onboarding assistant that integrates with Google Drive, Telegram,
 - 📱 **Telegram Bot**: (Coming soon) Chat interface for querying the assistant
 - 💾 **Smart Caching**: Tracks document changes using MD5 hashing to avoid redundant processing
 - 🔒 **Secure**: API keys encrypted using Fernet symmetric encryption
+  
+<img width="951" height="1162" alt="Screenshot 2026-01-15 at 1 21 42 PM" src="https://github.com/user-attachments/assets/43ac4d5c-8a9d-45d0-bddf-c76c7a9d9b87" />
+<img width="951" height="1162" alt="Screenshot 2026-01-15 at 1 21 42 PM" src="https://github.com/user-attachments/assets/b71ab6ae-d445-4b7b-b5a6-000a6330f6d2" />
+<img width="2438" height="1187" alt="Screenshot 2026-01-15 at 1 18 38 PM" src="https://github.com/user-attachments/assets/47b7f919-554c-4cfa-b919-8407e96a797d" />
+<img width="2439" height="1190" alt="Screenshot 2026-01-15 at 1 18 57 PM" src="https://github.com/user-attachments/assets/f1901371-1789-4ae8-9244-13bfc11457d1" />
 
 ## Quick Start
 
