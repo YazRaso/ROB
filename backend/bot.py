@@ -16,8 +16,7 @@ from telegram.ext import (
 import db
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-SERVER_URL = os.getenv("SERVER_URL", "https://rob-production.up.railway.app/")
-
+SERVER_URL = "https://rob-production.up.railway.app/"
 
 async def emit_telegram_event(client_id: str = None):
     """
@@ -47,7 +46,7 @@ async def log_thread(update: Update, context: ContextTypes.DEFAULT_TYPE):
     import requests
     parmas = {
         "client_id": client_id,
-        "content": content
+        "content": chat
     }
     requests.post(f"{SERVER_URL}/messages/send", params=params)
 
