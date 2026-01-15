@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import DemoToggle from "./DemoToggle";
-import SourceStatus from "./SourceStatus";
 import { API } from "../lib/api";
 
 export default function ConnectedClient() {
@@ -49,13 +48,6 @@ export default function ConnectedClient() {
       <DemoToggle
         enabled={demoEnabled}
         onToggle={() => setDemoEnabled(!demoEnabled)}
-      />
-
-      <SourceStatus
-        drive={drive}
-        codebase={codebase}
-        telegram={telegram}
-        summarizer={summarizer}
       />
 
       <div className="glass-card p-8 rounded-3xl border-zinc-800/30">
