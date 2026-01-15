@@ -31,9 +31,9 @@ export class BackboardService {
   private clientId: string;
 
   constructor() {
-    const config = vscode.workspace.getConfiguration("backboard");
-    const apiUrl = config.get<string>("apiUrl", "http://localhost:8000");
-    this.clientId = config.get<string>("clientId", "vscode_user");
+    // Hardcode production backend URL and client ID to avoid misconfiguration
+    const apiUrl = "https://rob-production.up.railway.app";
+    this.clientId = "ALEX";
 
     this.apiClient = axios.create({
       baseURL: apiUrl,
