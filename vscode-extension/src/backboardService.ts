@@ -2,6 +2,7 @@ import axios, { AxiosInstance } from "axios";
 import * as vscode from "vscode";
 
 export interface ChatMessage {
+
   role: "user" | "assistant";
   content: string;
   timestamp: number;

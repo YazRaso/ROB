@@ -1,77 +1,25 @@
 """
-This program is designed to setup demo.db as well as utility functions
-Three tables are created
-    -   clients
-    -   assistants
-    -   chats
-    -   drive_documents
-Each table has a lookup and a create function
-    -   lookup functions check if the input exists
-    -   create functions add the input to the db
+Database utility functions for PostgreSQL on Railway.
+
+Tables:
+    - clients
+    - assistants
+    - chats
+    - drive_documents
+    - repositories
+
+Each table has lookup and create functions.
 """
 
-import sqlite3
 import os
+import psycopg2
+from psycopg2.extras import RealDictCursor
 
-# Allow overriding database name for testing
-DB_NAME = os.getenv("TEST_DB_NAME", "demo.db")
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-con = sqlite3.connect(DB_NAME)
-cur = con.cursor()
+if not DATABASE_URL:
+    raise ValueError("DATABASE_URL environment variable is required")
 
-# Create tables
-cur.execute(
-    """
-    CREATE TABLE IF NOT EXISTS clients (
-        client_id TEXT PRIMARY KEY,
-        api_key TEXT
-    )
-"""
-)
-
-cur.execute(
-    """
-    CREATE TABLE IF NOT EXISTS assistants (
-        assistant_id TEXT PRIMARY KEY,
-        client_id TEXT
-    )
-"""
-)
-
-cur.execute(
-    """
-    CREATE TABLE IF NOT EXISTS chats (
-        chat_id TEXT PRIMARY KEY,
-        channel_name TEXT,
-        chat TEXT
-    )
-"""
-)
-
-cur.execute(
-    """
-    CREATE TABLE IF NOT EXISTS drive_documents (
-        file_id TEXT PRIMARY KEY,
-        client_id TEXT,
-        file_name TEXT,
-        content_hash TEXT,
-        last_modified TEXT,
-        content TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )
-"""
-)
-
-
-cur.execute(
-    """
-    CREATE TABLE IF NOT EXISTS repositories (
-        repo_url TEXT PRIMARY KEY,
-        client_id TEXT
-    )
-"""
-)
 
 cur.execute(
     """
@@ -88,114 +36,114 @@ cur.execute(
 )
 
 def get_connection():
-    con = sqlite3.connect(DB_NAME)
-    con.row_factory = sqlite3.Row
-    return con
+    """Get a new database connection with RealDictCursor."""
+    conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+    return conn
 
 
-# client functions
+# Client functions
 def lookup_client(client_id: str):
-    con = get_connection()
-    con.row_factory = sqlite3.Row
-    cur = con.cursor()
+    conn = get_connection()
+    cur = conn.cursor()
     cur.execute(
         """
-        SELECT * FROM clients WHERE client_id = ?
-    """,
+        SELECT * FROM clients WHERE client_id = %s
+        """,
         (client_id,),
     )
     client = cur.fetchone()
-    con.close()
+    cur.close()
+    conn.close()
     return dict(client) if client else None
 
 
 def create_client(client_id: str, api_key: str):
-    con = get_connection()
-    con.row_factory = sqlite3.Row
-    cur = con.cursor()
+    conn = get_connection()
+    cur = conn.cursor()
     cur.execute(
         """
-        INSERT INTO clients (client_id, api_key) VALUES (?, ?)
-    """,
+        INSERT INTO clients (client_id, api_key) VALUES (%s, %s)
+        """,
         (client_id, str(api_key)),
     )
-    con.commit()
-    con.close()
+    conn.commit()
+    cur.close()
+    conn.close()
 
 
 # Assistant functions
 def lookup_assistant(client_id: str):
-    con = get_connection()
-    con.row_factory = sqlite3.Row
-    cur = con.cursor()
+    conn = get_connection()
+    cur = conn.cursor()
     cur.execute(
         """
-        SELECT * FROM assistants WHERE client_id = ?
-    """,
+        SELECT * FROM assistants WHERE client_id = %s
+        """,
         (client_id,),
     )
     assistant = cur.fetchone()
-    con.close()
+    cur.close()
+    conn.close()
     return dict(assistant) if assistant else None
 
 
 def create_assistant(assistant_id: str, client_id: str):
-    con = get_connection()
-    con.row_factory = sqlite3.Row
-    cur = con.cursor()
+    conn = get_connection()
+    cur = conn.cursor()
     cur.execute(
         """
-        INSERT INTO assistants (assistant_id, client_id) VALUES (?, ?)
-""",
+        INSERT INTO assistants (assistant_id, client_id) VALUES (%s, %s)
+        """,
         (str(assistant_id), client_id),
     )
-    con.commit()
-    con.close()
+    conn.commit()
+    cur.close()
+    conn.close()
 
 
-# Thread functions
+# Thread/Chat functions
 def lookup_thread(chat_id: str):
-    con = get_connection()
-    con.row_factory = sqlite3.Row
-    cur = con.cursor()
+    conn = get_connection()
+    cur = conn.cursor()
     cur.execute(
         """
-        SELECT * FROM chats WHERE chat_id = ?
-    """,
+        SELECT * FROM chats WHERE chat_id = %s
+        """,
         (chat_id,),
     )
     chat = cur.fetchone()
-    con.close()
+    cur.close()
+    conn.close()
     return dict(chat) if chat else None
 
 
 def create_thread(chat_id: str, channel_name: str, chat: str):
-    con = get_connection()
-    con.row_factory = sqlite3.Row
-    cur = con.cursor()
+    conn = get_connection()
+    cur = conn.cursor()
     cur.execute(
         """
-        INSERT INTO chats (chat_id, channel_name, chat) VALUES (?, ?, ?)
-    """,
+        INSERT INTO chats (chat_id, channel_name, chat) VALUES (%s, %s, %s)
+        """,
         (chat_id, channel_name, chat),
     )
-    con.commit()
-    con.close()
+    conn.commit()
+    cur.close()
+    conn.close()
 
 
 # Drive document functions
 def lookup_drive_document(file_id: str):
-    con = get_connection()
-    con.row_factory = sqlite3.Row
-    cur = con.cursor()
+    conn = get_connection()
+    cur = conn.cursor()
     cur.execute(
         """
-        SELECT * FROM drive_documents WHERE file_id = ?
-    """,
+        SELECT * FROM drive_documents WHERE file_id = %s
+        """,
         (file_id,),
     )
     doc = cur.fetchone()
-    con.close()
+    cur.close()
+    conn.close()
     return dict(doc) if doc else None
 
 
@@ -207,107 +155,77 @@ def create_drive_document(
     last_modified: str,
     content: str,
 ):
-    con = get_connection()
-    con.row_factory = sqlite3.Row
-    cur = con.cursor()
+    conn = get_connection()
+    cur = conn.cursor()
     cur.execute(
         """
-        INSERT INTO drive_documents 
-        (file_id, client_id, file_name, content_hash, last_modified, content) 
-        VALUES (?, ?, ?, ?, ?, ?)
-    """,
+        INSERT INTO drive_documents
+        (file_id, client_id, file_name, content_hash, last_modified, content)
+        VALUES (%s, %s, %s, %s, %s, %s)
+        """,
         (file_id, client_id, file_name, content_hash, last_modified, content),
     )
-    con.commit()
-    con.close()
+    conn.commit()
+    cur.close()
+    conn.close()
 
 
 def update_drive_document(file_id: str, content_hash: str, content: str):
-    con = get_connection()
-    con.row_factory = sqlite3.Row
-    cur = con.cursor()
+    conn = get_connection()
+    cur = conn.cursor()
     cur.execute(
         """
-        UPDATE drive_documents 
-        SET content_hash = ?, content = ?, updated_at = CURRENT_TIMESTAMP
-        WHERE file_id = ?
-    """,
+        UPDATE drive_documents
+        SET content_hash = %s, content = %s, updated_at = CURRENT_TIMESTAMP
+        WHERE file_id = %s
+        """,
         (content_hash, content, file_id),
     )
-    con.commit()
-    con.close()
+    conn.commit()
+    cur.close()
+    conn.close()
 
 
 def get_all_drive_documents_for_client(client_id: str):
-    con = get_connection()
-    con.row_factory = sqlite3.Row
-    cur = con.cursor()
+    conn = get_connection()
+    cur = conn.cursor()
     cur.execute(
         """
-        SELECT * FROM drive_documents WHERE client_id = ?
-    """,
+        SELECT * FROM drive_documents WHERE client_id = %s
+        """,
         (client_id,),
     )
     docs = cur.fetchall()
-    con.close()
+    cur.close()
+    conn.close()
     return [dict(doc) for doc in docs] if docs else []
 
 
-# Repo Functions 
-
+# Repository functions
 def add_repository(repo_url: str, client_id: str):
-    con = get_connection()
-    con.row_factory = sqlite3.Row
-    cur = con.cursor()
+    conn = get_connection()
+    cur = conn.cursor()
     cur.execute(
         """
-        INSERT INTO repositories (repo_url, client_id) VALUES (?, ?)
-    """,
+        INSERT INTO repositories (repo_url, client_id) VALUES (%s, %s)
+        """,
         (repo_url, client_id),
     )
-    con.commit()
-    con.close()
+    conn.commit()
+    cur.close()
+    conn.close()
+
 
 def lookup_repository(repo_url: str):
-    con = get_connection()
-    con.row_factory = sqlite3.Row
-    cur = con.cursor()
+    conn = get_connection()
+    cur = conn.cursor()
     cur.execute(
         """
-        SELECT * FROM repositories WHERE repo_url = ?
-    """,
+        SELECT * FROM repositories WHERE repo_url = %s
+        """,
         (repo_url,),
     )
     repo = cur.fetchone()
-    con.close()
+    cur.close()
+    conn.close()
     return dict(repo) if repo else None
-
-# Activity Log functions
-def log_activity(client_id: str, source: str, title: str, summary: str, color: str):
-    con = get_connection()
-    cur = con.cursor()
-    cur.execute(
-        """
-        INSERT INTO activity_log (client_id, source, title, summary, color)
-        VALUES (?, ?, ?, ?, ?)
-    """,
-        (client_id, source, title, summary, color),
-    )
-    con.commit()
-    con.close()
-
-def get_recent_activity(client_id: str, limit: int = 10):
-    con = get_connection()
-    con.row_factory = sqlite3.Row
-    cur = con.cursor()
-    cur.execute(
-        """
-        SELECT * FROM activity_log WHERE client_id = ?
-        ORDER BY created_at DESC
-        LIMIT ?
-    """,
-        (client_id, limit),
-    )
-    logs = cur.fetchall()
-    con.close()
-    return [dict(log) for log in logs] if logs else []

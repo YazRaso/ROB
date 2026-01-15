@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import * as path from "path";
 import { BackboardService, ChatMessage, FileContext } from "./backboardService";
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
@@ -25,7 +26,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
     webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
 
-    webviewView.webview.onDidReceiveMessage(async (data) => {
+    webviewView.webview.onDidReceiveMessage(async (data: any) => {
       switch (data.type) {
         case "sendMessage":
           await this.handleUserMessage(data.message);
@@ -84,6 +85,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         type: "addMessage",
         message: response,
       });
+
+      // Handle tool results (e.g., create_file)
+      if ((response as any).toolResult?.type === 'create_file') {
+        await this.handleCreateFile((response as any).toolResult);
+      }
     } catch (error) {
       this._view?.webview.postMessage({ type: "hideTyping" });
       const errorMessage: ChatMessage = {
@@ -112,6 +118,9 @@ I can help you explore your team's knowledge from:
 
 **Quick tips:**
 • Type @source to see exact source files
+• Type @create_file to create onboarding docs
+• Type @get_recent_context to catch up on recent activity
+• Type @generate_mermaid_graph to visualize feature lineage
 • Use Cmd+Shift+A for quick questions
 • Ask about meetings, code changes, or team discussions
 
@@ -182,6 +191,99 @@ How can I help you today?`,
   private removeContext() {
     this.currentContext = null;
     this._view?.webview.postMessage({ type: "contextRemoved" });
+  }
+
+  private async handleCreateFile(toolResult: any) {
+    try {
+      const filename = toolResult.filename;
+      const content = toolResult.content;
+
+      if (!filename || !content) {
+        vscode.window.showErrorMessage('File creation failed: missing filename or content');
+        return;
+      }
+
+      // Validate and sanitize filename to prevent path traversal
+      if (!filename.trim()) {
+        vscode.window.showErrorMessage('File creation failed: filename cannot be empty');
+        return;
+      }
+
+      // Get workspace folder
+      const workspaceFolders = vscode.workspace.workspaceFolders;
+      if (!workspaceFolders || workspaceFolders.length === 0) {
+        vscode.window.showErrorMessage('No workspace folder found');
+        return;
+      }
+
+      const workspaceRoot = workspaceFolders[0].uri;
+      
+      // Normalize and validate path segments
+      const normalizedPath = path.normalize(filename).replace(/\\/g, '/');
+      const segments = normalizedPath.split('/').filter(seg => seg.length > 0);
+      
+      // Reject absolute paths
+      if (path.isAbsolute(normalizedPath)) {
+        vscode.window.showErrorMessage('File creation failed: absolute paths are not allowed');
+        return;
+      }
+      
+      // Reject paths containing '..' (path traversal)
+      if (segments.includes('..')) {
+        vscode.window.showErrorMessage('File creation failed: path traversal (..) is not allowed');
+        return;
+      }
+      
+      // Build target URI using sanitized segments
+      const fileUri = vscode.Uri.joinPath(workspaceRoot, ...segments);
+      
+      // Verify the resolved path is inside workspace root
+      const workspaceRootPath = workspaceRoot.fsPath;
+      const filePath = fileUri.fsPath;
+      const relativePath = path.relative(workspaceRootPath, filePath);
+      
+      if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+        vscode.window.showErrorMessage('File creation failed: path is outside workspace');
+        return;
+      }
+
+      // Create directory if needed using sanitized segments
+      if (segments.length > 1) {
+        const dirSegments = segments.slice(0, -1);
+        const dirUri = vscode.Uri.joinPath(workspaceRoot, ...dirSegments);
+        
+        try {
+          await vscode.workspace.fs.createDirectory(dirUri);
+        } catch (error: any) {
+          // Only ignore "already exists" errors, rethrow others
+          if (error instanceof vscode.FileSystemError) {
+            // Check if it's a FileExists error
+            if (error.code === 'EntryExists' || error.code === 'FileExists') {
+              // Directory already exists, this is fine
+            } else {
+              // Other filesystem errors (permission, IO, etc.) should be surfaced
+              throw error;
+            }
+          } else {
+            // Non-FileSystemError should be rethrown
+            throw error;
+          }
+        }
+      }
+
+      // Write file
+      const encoder = new TextEncoder();
+      const fileData = encoder.encode(content);
+      await vscode.workspace.fs.writeFile(fileUri, fileData);
+
+      // Open the file
+      const document = await vscode.workspace.openTextDocument(fileUri);
+      await vscode.window.showTextDocument(document);
+
+      vscode.window.showInformationMessage(`File created: ${filename}`);
+    } catch (error) {
+      vscode.window.showErrorMessage(`Failed to create file: ${error}`);
+    }
   }
 
   private openFileAtLine(filePath: string, line?: number) {

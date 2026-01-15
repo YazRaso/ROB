@@ -13,11 +13,16 @@ from backboard.exceptions import BackboardAPIError
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
-from src.backend import encryption
-from src.backend import db
-from src.backend.drive_service import DriveService, extract_file_id_from_url
-from src.backend.git_service import parse_github_url, fetch_repo_contents, fetch_file_content, should_ingest_file, should_skip_directory
-from src.backend.events import emit_event, event_stream
+import db
+from drive_service import DriveService, extract_file_id_from_url
+from git_service import parse_github_url, fetch_repo_contents, fetch_file_content, should_ingest_file, should_skip_directory
+from events import emit_event, event_stream
+from tools import (
+    get_backboard_tools,
+    handle_create_file,
+    handle_get_recent_context,
+    handle_generate_mermaid_graph
+)
 
 app = FastAPI()
 
@@ -109,15 +114,16 @@ async def create_client(client_id: str, api_key: str, status_code=201):
         raise HTTPException(status_code=409, detail="Client already exists!")
     # Connect to backboard
     backboard_client = BackboardClient(api_key=api_key)
-    # Create assistant
+    # Create assistant with tools
+    tools = get_backboard_tools()
     assistant = await backboard_client.create_assistant(
         name="Test Assistant",
-        description="An assistant designed to understand your code",
+        description="You are a helpful assistant designed to understand code and help with onboarding. You can create files, retrieve recent context, and generate visualizations.",
+        tools=tools
     )
     # Create entries for db
-    encrypted_api_key = encryption.encrypt_api_key(api_key)
     db.create_assistant(assistant.assistant_id, client_id)
-    db.create_client(client_id, encrypted_api_key)
+    db.create_client(client_id, api_key)
 
     return {
         "status": "created",
@@ -129,36 +135,123 @@ async def create_client(client_id: str, api_key: str, status_code=201):
 # add_thread uses client_ids assistant and prompts backboard with content
 @app.post("/messages/send")
 async def add_thread(client_id: str, content: str, status_code=201):
-    client = get_or_create_client(client_id)
+    import json
+    
+    client = db.lookup_client(client_id)
     if not client:
         raise HTTPException(status_code=404, detail="Client does not exist!")
     # For simplicity, we assume that each client has one assistant
-    decrypted_api_key = encryption.decrypt_api_key(client["api_key"])
-    backboard_client = BackboardClient(api_key=decrypted_api_key)
+    backboard_client = BackboardClient(api_key=client["api_key"])
     assistant = db.lookup_assistant(client_id)
     if not assistant:
         raise HTTPException(
             status_code=404, detail="No assistant found for this client!"
         )
     assistant_id = assistant["assistant_id"]
-    try:
-        thread = await backboard_client.create_thread(assistant_id)
-        output = []
-        async for chunk in await backboard_client.add_message(
-            thread_id=thread.thread_id,
-            content=content,
-            memory="auto",
-            stream=True
-        ):
-            if chunk['type'] == 'content_streaming':
-                output.append(chunk['content'])
-        return "".join(output)
-    except BackboardAPIError as e:
-        if "API Key" in str(e):
-            return "Local Server Message: I detected that no real Backboard API Key is configured. Please add `BACKBOARD_API_KEY` to your `.env` file to enable real AI responses!"
-        return f"Local Server Error: {str(e)}"
-    except Exception as e:
-        return f"Local Server unexpected error: {str(e)}"
+
+    # Create thread and send message
+    thread = await backboard_client.create_thread(assistant_id)
+    response = await backboard_client.add_message(
+        thread_id=thread.thread_id,
+        content=content,
+        memory="auto",
+        stream=False
+    )
+    
+    # Check if Backboard requires tool calls
+    # Handle both dict and object response structures
+    response_status = response.status if hasattr(response, 'status') else response.get('status') if isinstance(response, dict) else None
+    response_tool_calls = response.tool_calls if hasattr(response, 'tool_calls') else response.get('tool_calls') if isinstance(response, dict) else None
+    response_run_id = response.run_id if hasattr(response, 'run_id') else response.get('run_id') if isinstance(response, dict) else None
+    
+    if response_status == "REQUIRES_ACTION" and response_tool_calls:
+        tool_outputs = []
+        
+        # Process each tool call
+        for tc in response_tool_calls:
+            # Handle both dict and object tool call structures
+            if isinstance(tc, dict):
+                tc_function = tc.get('function', {})
+                tool_name = tc_function.get('name') if isinstance(tc_function, dict) else None
+                args = tc_function.get('parsed_arguments', {}) if isinstance(tc_function, dict) else {}
+                tc_id = tc.get('id')
+            else:
+                if not hasattr(tc, 'function'):
+                    continue
+                tool_name = tc.function.name if hasattr(tc.function, 'name') else None
+                args = getattr(tc.function, 'parsed_arguments', {})
+                tc_id = tc.id if hasattr(tc, 'id') else None
+            
+            if not tool_name or not tc_id:
+                continue
+            
+            try:
+                # Execute the appropriate tool
+                if tool_name == "create_file":
+                    filename = args.get("filename", "docs/ONBOARDING.md") if isinstance(args, dict) else getattr(args, 'get', lambda k, d: d)("filename", "docs/ONBOARDING.md")
+                    result = await handle_create_file(
+                        client_id, filename, backboard_client, assistant_id, user_query=content
+                    )
+                    tool_outputs.append({
+                        "tool_call_id": tc_id,
+                        "output": json.dumps(result)
+                    })
+                    
+                elif tool_name == "get_recent_context":
+                    hours = args.get("hours", 24) if isinstance(args, dict) else getattr(args, 'get', lambda k, d: d)("hours", 24)
+                    result = await handle_get_recent_context(
+                        client_id, backboard_client, assistant_id, hours
+                    )
+                    tool_outputs.append({
+                        "tool_call_id": tc_id,
+                        "output": json.dumps(result)
+                    })
+                    
+                elif tool_name == "generate_mermaid_graph":
+                    topic = args.get("topic", "feature lineage") if isinstance(args, dict) else getattr(args, 'get', lambda k, d: d)("topic", "feature lineage")
+                    result = await handle_generate_mermaid_graph(
+                        client_id, topic, backboard_client, assistant_id
+                    )
+                    tool_outputs.append({
+                        "tool_call_id": tc_id,
+                        "output": json.dumps(result)
+                    })
+                else:
+                    # Unknown tool - return error
+                    tool_outputs.append({
+                        "tool_call_id": tc_id,
+                        "output": json.dumps({"error": f"Unknown tool: {tool_name}"})
+                    })
+            except Exception as e:
+                # Tool execution failed - return error
+                print(f"Error executing tool {tool_name}: {e}")
+                import traceback
+                traceback.print_exc()
+                tool_outputs.append({
+                    "tool_call_id": tc_id,
+                    "output": json.dumps({"error": f"Tool execution failed: {str(e)}"})
+                })
+        
+        # Submit tool outputs back to Backboard
+        if tool_outputs:
+            try:
+                if not response_run_id:
+                    raise ValueError("Response missing run_id")
+                
+                final_response = await backboard_client.submit_tool_outputs(
+                    thread_id=thread.thread_id,
+                    run_id=response_run_id,
+                    tool_outputs=tool_outputs
+                )
+                return final_response.content if hasattr(final_response, 'content') else final_response.get('content') if isinstance(final_response, dict) else str(final_response)
+            except Exception as e:
+                print(f"Error submitting tool outputs: {e}")
+                import traceback
+                traceback.print_exc()
+                return {"error": f"Failed to submit tool outputs: {str(e)}"}
+    
+    # Normal response (no tool calls needed)
+    return response.content if hasattr(response, 'content') else response.get('content') if isinstance(response, dict) else str(response)
 
 # query sends backboards response along with sources of information
 @app.post("/messages/query")
@@ -167,8 +260,7 @@ async def query(client_id: str, content: str, status_code=201):
     if not client:
         raise HTTPException(status_code=404, detail="Client does not exist!")
     # For simplicity, we assume that each client has one assistant
-    decrypted_api_key = encryption.decrypt_api_key(client["api_key"])
-    backboard_client = BackboardClient(api_key=decrypted_api_key)
+    backboard_client = BackboardClient(api_key=client["api_key"])
     assistant = db.lookup_assistant(client_id)
     if not assistant:
         raise HTTPException(
@@ -571,8 +663,7 @@ async def git_webhook(request: Request):
         return {"status": "ignored", "reason": "No ingestable files changed"}
 
     # Send to Backboard memory
-    decrypted_api_key = encryption.decrypt_api_key(client["api_key"])
-    backboard_client = BackboardClient(api_key=decrypted_api_key)
+    backboard_client = BackboardClient(api_key=client["api_key"])
     assistant = db.lookup_assistant(client_id)
     if not assistant:
         return {"status": "error", "reason": "No assistant found"}
@@ -613,4 +704,127 @@ async def git_webhook(request: Request):
         "repo_url": repo_url,
         "files_updated": len(changed_files),
         "files": [f[0] for f in changed_files],
+    }
+
+
+# Tool endpoints
+
+@app.post("/tools/create_file")
+async def create_file_tool(
+    client_id: str,
+    filename: str,
+    content: str,
+    status_code=201
+):
+    """
+    Tool endpoint: create_file
+    Creates a new file in the user's workspace.
+    
+    This endpoint is called by the frontend when the LLM requests file creation.
+    The actual file creation happens in the VS Code extension or web frontend.
+    """
+    client = db.lookup_client(client_id)
+    if not client:
+        raise HTTPException(status_code=404, detail="Client does not exist!")
+    
+    # Validate and sanitize filename to prevent path traversal
+    if not filename or not filename.strip():
+        raise HTTPException(status_code=400, detail="Filename cannot be empty")
+    
+    # Normalize the path
+    normalized_path = os.path.normpath(filename)
+    
+    # Reject absolute paths
+    if os.path.isabs(normalized_path):
+        raise HTTPException(status_code=400, detail="Absolute paths are not allowed")
+    
+    # Reject paths containing '..' (path traversal)
+    if '..' in normalized_path.split(os.sep):
+        raise HTTPException(status_code=400, detail="Path traversal (..) is not allowed")
+    
+    # Reject paths with path separators outside allowed patterns
+    # Allow forward slashes for cross-platform compatibility, but validate segments
+    segments = normalized_path.replace('\\', '/').split('/')
+    for segment in segments:
+        if segment in ('..', '.') or os.sep in segment or (os.altsep and os.altsep in segment):
+            raise HTTPException(status_code=400, detail="Invalid path segment")
+    
+    # Limit filename length
+    if len(normalized_path) > 255:
+        raise HTTPException(status_code=400, detail="Filename too long (max 255 characters)")
+    
+    # Use the sanitized filename
+    sanitized_filename = normalized_path.replace('\\', '/')  # Normalize to forward slashes
+
+    backboard_client = BackboardClient(api_key=client["api_key"])
+    assistant = db.lookup_assistant(client_id)
+    if not assistant:
+        raise HTTPException(status_code=404, detail="No assistant found!")
+    
+    result = await handle_create_file(
+        client_id, sanitized_filename, backboard_client, assistant["assistant_id"], user_query=content
+    )
+    
+    return result
+
+
+@app.post("/tools/get_recent_context")
+async def get_recent_context_tool(
+    client_id: str,
+    hours: int = 24,
+    status_code=200
+):
+    """
+    Tool endpoint: get_recent_context
+    Retrieves RAG chunks ingested within the last X hours, grouped by source.
+    """
+    client = db.lookup_client(client_id)
+    if not client:
+        raise HTTPException(status_code=404, detail="Client does not exist!")
+
+    backboard_client = BackboardClient(api_key=client["api_key"])
+    assistant = db.lookup_assistant(client_id)
+    if not assistant:
+        raise HTTPException(status_code=404, detail="No assistant found!")
+
+    result = await handle_get_recent_context(
+        client_id, backboard_client, assistant["assistant_id"], hours
+    )
+    
+    return result
+
+
+@app.post("/tools/generate_mermaid_graph")
+async def generate_mermaid_graph_tool(
+    client_id: str,
+    topic: str,
+    status_code=200
+):
+    """
+    Tool endpoint: generate_mermaid_graph
+    Generates a Mermaid.js syntax string that maps the lineage of a feature.
+    """
+    client = db.lookup_client(client_id)
+    if not client:
+        raise HTTPException(status_code=404, detail="Client does not exist!")
+
+    backboard_client = BackboardClient(api_key=client["api_key"])
+    assistant = db.lookup_assistant(client_id)
+    if not assistant:
+        raise HTTPException(status_code=404, detail="No assistant found!")
+
+    result = await handle_generate_mermaid_graph(
+        client_id, topic, backboard_client, assistant["assistant_id"]
+    )
+    
+    return result
+
+
+@app.get("/tools/definitions")
+async def get_tool_definitions():
+    """
+    Get all tool definitions for Backboard.
+    """
+    return {
+        "tools": get_backboard_tools()
     }

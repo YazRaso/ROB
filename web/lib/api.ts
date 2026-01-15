@@ -22,6 +22,31 @@ export const API = {
     },
 
     async query(prompt: string, clientId: string = "default_user") {
+        // Check for tool invocations and use API route if found
+        const toolPattern = /@(\w+)/;
+        if (toolPattern.test(prompt)) {
+            // Use Next.js API route for tool handling
+            const res = await fetch("/api/query", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ prompt, clientId }),
+            });
+            if (!res.ok) throw new Error("Failed to query");
+            const data = await res.json();
+            
+            // Handle tool results
+            if (data.type === "tool_result") {
+                if (data.tool === "create_file") {
+                    // For web, we could trigger file download or show content
+                    return data.reply + "\n\n" + JSON.stringify(data.result, null, 2);
+                }
+                return data.reply || data.result?.formatted || JSON.stringify(data.result);
+            }
+            
+            return data.reply || data;
+        }
+        
+        // Normal query - use direct backend
         const res = await fetch(`${BASE_URL}/messages/send?client_id=${clientId}&content=${encodeURIComponent(prompt)}`, {
             method: "POST",
         });

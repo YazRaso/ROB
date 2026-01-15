@@ -3,7 +3,7 @@ This file is designed to listen to incoming messages, send them to backboard and
 The program requires a bot token, you can get this through telegram using botfather
 """
 
-from dotenv import load_dotenv
+
 import os
 import httpx
 from telegram import Update
@@ -12,11 +12,9 @@ from telegram.ext import (
     MessageHandler,
     ContextTypes,
     filters,
-    ContextTypes,
 )
 from src.backend import db
 
-load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 SERVER_URL = os.getenv("SERVER_URL", "https://rob-production.up.railway.app/")
 
