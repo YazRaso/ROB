@@ -17,7 +17,7 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
-BASE_URL = "http://localhost:8000"
+BASE_URL = "https://rob-production.up.railway.app/"
 CLIENT_ID = "mchacks_test"
 BACKBOARD_API_KEY = os.getenv("BACKBOARD_API_KEY")
 

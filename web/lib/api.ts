@@ -1,4 +1,4 @@
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://rob-production.up.railway.app/";
 
 export type ActivitySource = "drive" | "repo" | "telegram";
 

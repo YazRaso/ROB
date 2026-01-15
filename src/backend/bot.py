@@ -3,7 +3,6 @@ This file is designed to listen to incoming messages, send them to backboard and
 The program requires a bot token, you can get this through telegram using botfather
 """
 
-
 from dotenv import load_dotenv
 import os
 import httpx
@@ -13,13 +12,13 @@ from telegram.ext import (
     MessageHandler,
     ContextTypes,
     filters,
-    ContextTypes
+    ContextTypes,
 )
 from src.backend import db
 
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-SERVER_URL = os.getenv("SERVER_URL", "http://localhost:8000")
+SERVER_URL = os.getenv("SERVER_URL", "https://rob-production.up.railway.app/")
 
 
 async def emit_telegram_event(client_id: str = None):
@@ -59,6 +58,7 @@ async def log_thread(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Notify frontend of new telegram message
     await emit_telegram_event()
+
 
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 
