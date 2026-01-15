@@ -1,0 +1,127 @@
+================================================================================
+TASKFLOW CODEBASE CONTEXT EXPORT
+================================================================================
+This is a simulated codebase for testing Backboard - a devtool that connects
+code decisions to external context (Google Drive, Telegram).
+
+================================================================================
+TEAM
+================================================================================
+- Jack - Tech Lead
+- Karan - Senior Backend Dev  
+- Eldiiar - Frontend Dev
+- Yazdan - Junior Dev (new hire)
+
+================================================================================
+PROJECT OVERVIEW
+================================================================================
+TaskFlow is an internal project management API (like mini-Jira) built with:
+- FastAPI (Python)
+- PostgreSQL
+- Custom authentication
+
+================================================================================
+GIT COMMIT HISTORY
+================================================================================
+3cd6510 Yazdan: Update all references to use first names only
+a4ee93c Jack: Add external content guide for Backboard testing
+8506c88 Karan: Remove BLOCKED status - use labels instead (post Q2 outage)
+4be4a53 Jack: Split WRITE/DELETE permissions after incident (PM-2024-03)
+3cd1b4a Eldiiar: Add bulk status update endpoint (TF-2341)
+3d96b69 Yazdan: Update README with project structure and team info
+bb3a94e Jack: Add architecture documentation
+223340d Jack: Wire up FastAPI app with middleware and routers
+a05a9d3 Karan: Add legacy v1 API for backward compatibility - DO NOT REMOVE
+49110d3 Eldiiar: Add project endpoints with slug generation
+60c86cf Karan: Add task CRUD endpoints
+cdb43a5 Jack: Add rate limiter - 47 req/min based on capacity planning
+2942693 Jack: Implement custom auth system - see architecture docs for rationale
+21247ae Karan: Add database layer with custom task ID format (TF-XXXX-XXXX)
+a5e355e Karan: Add Pydantic models for tasks, projects, and users
+dd2d3ef Jack: Add core config with rate limiting and timezone defaults
+f0bb1d3 Jack: Initial project setup with FastAPI
+
+================================================================================
+MYSTERY DECISIONS (code has hints, external docs have answers)
+================================================================================
+
+1. RATE LIMIT = 47 req/min
+   Code says: "carefully calculated, do not modify"
+   WHY? → Capacity planning doc (Google Drive)
+
+2. CUSTOM AUTH (not Auth0/Clerk)
+   Code says: "Self-hosted requirement from enterprise customers"
+   WHY? → Auth Architecture Decision Record (Google Drive)
+
+3. TASK ID FORMAT (TF-XXXX-XXXX not UUIDs)
+   Code says: "Customers specifically requested this"
+   WHY? → Telegram thread from Oct 2024
+
+4. DEFAULT TIMEZONE = "America/Chicago"
+   Code says: "Don't change - see external docs"
+   WHY? → Telegram convo about first customer
+
+5. NO ORM (raw SQL instead of SQLAlchemy)
+   Code says: "Performance requirements + Postgres features"
+   WHY? → Database Layer Architecture doc (Google Drive)
+
+6. LEGACY v1 API MUST STAY
+   Code says: "Do NOT remove until all clients migrated"
+   WHY? → v1 API Migration Tracker + Telegram thread
+
+7. BLOCKED STATUS REMOVED
+   Code says: "Jack's call after the Q2 outage"
+   WHY? → Q2 2024 Postmortem + Telegram discussion
+
+8. WRITE/DELETE PERMISSION SPLIT
+   Code says: "after the March incident (PM-2024-03)"
+   WHY? → Postmortem PM-2024-03 (Google Drive)
+
+9. HARD DELETES (not soft deletes)
+   Code says: "compliance requirement from legal"
+   WHY? → Legal team GDPR doc (Google Drive)
+
+10. STORY POINTS REMOVED
+    Code says: "eng team voted against estimation"
+    WHY? → Telegram team vote discussion
+
+11. GUEST ROLE DEPRECATED
+    Code says: "security audit findings"
+    WHY? → Security audit report (Google Drive)
+
+================================================================================
+SAMPLE CODE COMMENTS (showing the "mystery" hints)
+================================================================================
+
+From app/config.py:
+  DEFAULT_TIMEZONE = "America/Chicago"  # Don't change - see external docs
+  RATE_LIMIT_PER_MINUTE = 47  # carefully calculated, do not modify
+  LEGACY_V1_SUPPORT = True  # Keep enabled until Q3 - Karan knows the details
+
+From app/auth.py:
+  # We rolled our own auth instead of using Auth0/Clerk because:
+  # 1. Self-hosted requirement from enterprise customers
+  # 2. Specific SSO requirements that didn't fit standard providers
+  # 3. Cost at our scale
+
+From app/database.py:
+  # Why this format instead of UUIDs?
+  # - Easier to reference in conversation ("TF-3847" vs a UUID)
+  # - Customers specifically requested this in early feedback
+  # - See Telegram thread from Oct 2024 for full discussion
+
+From app/models/task.py:
+  # BLOCKED status removed in v2.0 - we use labels now (Jack's call after Q2 outage)
+  # story_points removed after eng team voted against estimation
+
+From app/routes/legacy.py:
+  # DEPRECATION NOTICE:
+  # Do NOT remove until all clients have migrated to v2.
+  # Known v1 clients still active:
+  # - Acme Corp integration
+  # - Internal Zapier automation (Karan set this up)
+  # - The old mobile app (targeting sunset Q3 2025)
+
+================================================================================
+END
+================================================================================

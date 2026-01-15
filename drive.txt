@@ -1,0 +1,301 @@
+"Why is everything hardcoded to Chicago?"
+Why it's good: They'd notice America/Chicago in config and user model, seems like a bug or oversight. Real answer: first paying customer was in Chicago and asked for it, team never got around to making it configurable.
+"Should I add story points to the task model for sprint planning?"
+Why it's good: Seems like an obvious missing feature. They don't know the team already had this, debated it, and voted to remove it. Answer lives in a Telegram retro discussion.
+"Is it safe to delete projects? The delete endpoint looks scary."
+Why it's good: They see "WARNING: hard delete, no recovery" and get nervous. Real context: legal/GDPR compliance required true deletion, not soft delete. Lives in a legal doc.
+"Who should I ask about the v1 API?"
+Why it's good: Vague question, but Backboard should surface that Karan owns the Zapier integration, knows the legacy clients, and is tracking migration in TF-1892.
+"Why don't we just use SQLAlchemy like every other Python project?"
+Why it's good: Sounds like a complaint/suggestion. Real answer involves performance benchmarks, Postgres-specific features, and a team vote - scattered across architecture docs and discussions.
+
+
+ADR-014 Authentication Strategy
+Title: ADR 014 - Authentication Provider Strategy Status: ACCEPTED Author: Jack Date: Feb
+02, 2024
+CONTEXT We need to finalize how we handle user authentication before the beta launch. The
+initial plan was to use a third-party provider like Auth0 or Clerk to save development time.
+However, our sales conversation with Acme Corp (potential enterprise design partner) has
+introduced new constraints.
+1. They require SAML 2.0.
+2. They require custom LDAP integration for their on-premise legacy servers.
+OPTIONS
+Option A: Auth0 Enterprise
+● Pros: standard implementation, high security.
+● Cons: LDAP support is gatekept behind the "Enterprise" tier.
+● Cost: Sales rep quoted us ~$15,000/month minimum commitment. This burns 20% of
+our monthly runway.
+Option B: Self-Hosted / Custom Build
+● Pros: Free (software-wise), full control.
+● Cons: We have to maintain it. Security risk if we mess up.
+● Cost: Estimated $2,000/month in server costs + maintenance time.
+DECISION We will build our own authentication system (Option B). We cannot afford the
+$15k/mo contract at this stage.
+IMPLEMENTATION DETAILS
+● Karan will lead the backend implementation.
+● We will use standard libraries for JWT handling.
+● Security audit required before launch.
+CONSEQUENCES
+● We are responsible for all auth security patches.
+● Onboarding timeline extended by 2 weeks to accommodate this build.
+Database Architecture
+RFC: Database Interaction Layer Date: May 20, 2024 Owner: Jack
+1. Problem We need to decide on the data access pattern for the core API. The choice is
+between a full ORM (SQLAlchemy/Prisma) or Raw SQL (asyncpg).
+2. Constraints
+● We are using Postgres.
+● We rely heavily on JSONB columns for the "Custom Fields" feature.
+● Performance is critical for the "Bulk Import" feature.
+3. Benchmarking I ran a script inserting 10k rows (see /scripts/bench_db.py).
+● SQLAlchemy ORM: 4.2s
+● Raw SQL (Asyncpg): 1.1s
+4. Discussion Karan: "I hate debugging ORM magic. When it breaks, you don't know why."
+Eldiiar: "As long as the API is fast, I don't care." Jack: "The JSONB queries in
+SQLAlchemy are verbose and hard to read. Raw SQL is cleaner for Postgres specific
+features."
+5. 6. Vote Raw SQL: 3 votes (Jack, Karan, Eldiiar) ORM: 0 votes Abstain: 1 (Yazdan)
+Conclusion We will use Raw SQL. Note for onboarding: This makes the learning curve
+steeper. New hires need to know SQL. Please comment complex queries heavily.
+Eng Team Weekly Sync - Aug 14
+MEETING NOTES - ENGINEERING WEEKLY SYNC Date: August 14, 2024 Time: 10:00 AM
+EST Attendees: Jack,Karan, Eldiiar, Sarah (PM) Absent: None
+AGENDA
+1. Q3 Roadmap Review
+2. Incident Review: API Gateway Latency
+3. Office Updates (Coffee machine)
+NOTES
+1. Q3 Roadmap Sarah went over the Gantt chart. We are 2 weeks behind on the Mobile
+notifications feature. Eldiiar needs to sync with the design team regarding the new icon
+set.
+2. Incident Review: API Gateway Latency (The "504" Spike) Jack presented the K6 load
+test results from yesterday.
+● Background: We tested 50 req/min/user.
+● Result: Database connection pool exhaustion. The RDS instance choked.
+● Discussion: Karan asked if we can just upgrade the RDS instance. Jack said no, budget
+is frozen until Q1 2025.We need a software limit. Calculation: Jack showed that max
+theoretical throughput is 50, but we need a safety buffer. Standard deviation was ~6%.
+50 * 0.94 = 47 requests/min.
+DECISION: We are setting the hard rate limit to 47 requests/minute in the config. Action Item:
+Jack to push the config change today. Note: Do not change this number even if it looks weird.
+We risk downtime if we go higher before the DB upgrade.
+3. Office Updates The espresso machine is broken again. Please use the drip coffee maker
+until Tuesday.
+ACTION ITEMS
+Eldiiar: Email design team
+Jack: Update rate limiter to 47
+Karan: Fix the broken unit test in the payment module
+Legal Compliance - Data Retention.txt
+Subject: GDPR Compliance - Right to Erasure Implementation From: Legal Team To: Jack;
+Sarah Date: Sept 01, 2024
+Hi Jack,
+We have finished reviewing the technical proposal for the "Delete Account" feature.
+The proposal mentions using "Soft Deletes" (setting a flag to hidden but keeping the data).
+This does NOT meet our compliance requirements. Under GDPR Article 17 (Right to Erasure),
+when a user requests deletion, we must ensure the data is irretrievable. Keeping the rows in the
+database, even if hidden from the UI, puts us at liability risk.
+Requirement: Please implement "Hard Deletes". The data must be physically removed from the
+storage.
+Let us know when this is updated.
+(Jack's Note added to the bottom of the file) Dev team: You saw the email. No paranoid or
+soft-delete libraries. We have to actually DELETE FROM the table. Make sure your cascading
+deletes are set up in Postgres so we don't leave orphaned comments.
+Memo - WRITE vs DELETE Permissions
+MEMORANDUM To: Engineering Team From: Jack Date: March 03, 2024 Subject: CHANGE
+TO PERMISSION STRUCTURE (Important)
+Team,
+Following the data loss incident this morning (PM-2024-03), we are making an immediate
+change to how permissions work in the backend.
+Previously, the WRITE role implicitly included DELETE rights. This allowed a junior dev to
+accidentally wipe a production project while thinking they were on a test environment.
+Effective immediately:
+1. 2. WRITE permission now only allows Create and Update operations.
+DELETE is now a separate, explicit permission.
+By default, only Tech Leads and Admins will have the DELETE scope. If you need to delete a
+project, you must request temporary elevation or ask a lead.
+I know this adds friction, but we cannot risk another restore-from-backup situation.
+Regards, Jack
+Post-Mortem Incident 492
+INCIDENT POST-MORTEM: PM-2024-06 Date: June 14, 2024 Incident Level: SEV-2
+Description On June 12, TaskFlow suffered a 4-hour partial outage. The background worker
+queue backed up by 500,000 jobs, causing task updates to fail across the platform.
+Root Cause Analysis We had a business logic rule: "If Task A is BLOCKED by Task B, and
+Task B changes status, update Task A." Users created a circular dependency (A blocks B, B
+blocks A). When one task changed, it triggered the event handler, which updated the other task,
+which triggered the handler again. Infinite recursion ensued.
+Resolution
+1. 2. Immediate: We killed the worker queue and purged the jobs.
+Long term: We realized the "BLOCKED" status is too dangerous to have active logic
+attached to it.
+Action Items
+● [DONE] Remove BLOCKED from the TaskStatus enum in the code.
+● [DONE] We are switching to using a Label for blocking. Labels are passive data and do
+not trigger state change logic.
+● [DONE] Sarah (PM) approved the change.
+● [TODO] Update documentation to tell users to use the "blocked" label.
+Security Audit Executive Summary Q4
+Pentest Report - Q4 2024 Prepared by: CyberSec Consultants Ltd.
+EXECUTIVE SUMMARY Overall, the application security posture is strong. However, one high-
+severity vulnerability was identified in the Role-Based Access Control (RBAC) system.
+FINDING 01: Privilege Escalation in GUEST Role Severity: HIGH
+Details: The GUEST role is intended to be read-only for specific tasks. However, due to a
+missing scope check in UserPermissionMixin, a user with the GUEST role can query
+/api/v1/users and dump the entire user database, including email addresses of all team
+members.
+RECOMMENDATION Patch the scope check immediately. Alternatively, if the role is
+underused, remove it.
+ENGINEERING RESPONSE (Jack) We reviewed the usage logs. Less than 2% of users are
+assigned the GUEST role. Fixing the permission mixin logic is complex and prone to regression.
+Decision: We will deprecate the GUEST role entirely. Plan: Run a migration script to convert all
+GUEST users to VIEWER (which is secure).
+
+
+
+Context Doc
+
+Security Audit Executive Summary Q4.pdf
+Pentest Report - Q4 2024 Prepared by: CyberSec Consultants Ltd.
+
+EXECUTIVE SUMMARY Overall, the application security posture is strong. However, one high-
+severity vulnerability was identified in the Role-Based Access Control (RBAC) system.
+
+FINDING 01: Privilege Escalation in GUEST Role Severity: HIGH
+Details: The GUEST role is intended to be read-only for specific tasks. However, due to a
+missing scope check in UserPermissionMixin, a user with the GUEST role can query
+/api/v1/users and dump the entire user database, including email addresses of all team
+members.
+RECOMMENDATION Patch the scope check immediately. Alternatively, if the role is
+underused, remove it.
+ENGINEERING RESPONSE (Jack) We reviewed the usage logs. Less than 2% of users are
+assigned the GUEST role. Fixing the permission mixin logic is complex and prone to regression.
+Decision: We will deprecate the GUEST role entirely. Plan: Run a migration script to convert all
+GUEST users to VIEWER (which is secure).
+
+
+Post-Mortem Incident 492.pdf
+INCIDENT POST-MORTEM: PM-2024-06 Date: June 14, 2024 Incident Level: SEV-2
+Description On June 12, TaskFlow suffered a 4-hour partial outage. The background worker
+queue backed up by 500,000 jobs, causing task updates to fail across the platform.
+Root Cause Analysis We had a business logic rule: "If Task A is BLOCKED by Task B, and
+Task B changes status, update Task A." Users created a circular dependency (A blocks B, B
+blocks A). When one task changed, it triggered the event handler, which updated the other task,
+which triggered the handler again. Infinite recursion ensued.
+Resolution
+1. Immediate: We killed the worker queue and purged the jobs.
+2. Long term: We realized the "BLOCKED" status is too dangerous to have active logic
+attached to it.
+Action Items
+● [DONE] Remove BLOCKED from the TaskStatus enum in the code.
+● [DONE] We are switching to using a Label for blocking. Labels are passive data and do
+not trigger state change logic.
+● [DONE] Sarah (PM) approved the change.
+● [TODO] Update documentation to tell users to use the "blocked" label.
+
+Memo - WRITE vs DELETE Permissions.pdf
+MEMORANDUM To: Engineering Team From: Jack Date: March 03, 2024 Subject: CHANGE
+TO PERMISSION STRUCTURE (Important)
+Team,
+Following the data loss incident this morning (PM-2024-03), we are making an immediate
+change to how permissions work in the backend.
+Previously, the WRITE role implicitly included DELETE rights. This allowed a junior dev to
+accidentally wipe a production project while thinking they were on a test environment.
+Effective immediately:
+1. WRITE permission now only allows Create and Update operations.
+2. DELETE is now a separate, explicit permission.
+By default, only Tech Leads and Admins will have the DELETE scope. If you need to delete a
+project, you must request temporary elevation or ask a lead.
+I know this adds friction, but we cannot risk another restore-from-backup situation.
+Regards, Jack
+
+Legal Compliance - Data Retention.pdf
+Subject: GDPR Compliance - Right to Erasure Implementation From: Legal Team To: Jack;
+Sarah Date: Sept 01, 2024
+Hi Jack,
+We have finished reviewing the technical proposal for the "Delete Account" feature.
+The proposal mentions using "Soft Deletes" (setting a flag to hidden but keeping the data).
+This does NOT meet our compliance requirements. Under GDPR Article 17 (Right to Erasure),
+when a user requests deletion, we must ensure the data is irretrievable. Keeping the rows in the
+database, even if hidden from the UI, puts us at liability risk.
+Requirement: Please implement "Hard Deletes". The data must be physically removed from the
+storage.
+Let us know when this is updated.
+
+(Jack's Note added to the bottom of the file) Dev team: You saw the email. No paranoid or
+soft-delete libraries. We have to actually DELETE FROM the table. Make sure your cascading
+deletes are set up in Postgres so we don't leave orphaned comments.
+
+Eng Team Weekly Sync - Aug 14.pdf
+MEETING NOTES - ENGINEERING WEEKLY SYNC Date: August 14, 2024 Time: 10:00 AM
+EST Attendees: Jack,Karan, Eldiiar, Sarah (PM) Absent: None
+AGENDA
+1. Q3 Roadmap Review
+2. Incident Review: API Gateway Latency
+3. Office Updates (Coffee machine)
+NOTES
+1. Q3 Roadmap Sarah went over the Gantt chart. We are 2 weeks behind on the Mobile
+notifications feature. Eldiiar needs to sync with the design team regarding the new icon
+set.
+2. Incident Review: API Gateway Latency (The "504" Spike) Jack presented the K6 load
+test results from yesterday.
+● Background: We tested 50 req/min/user.
+● Result: Database connection pool exhaustion. The RDS instance choked.
+● Discussion: Karan asked if we can just upgrade the RDS instance. Jack said no, budget
+is frozen until Q1 2025.We need a software limit. Calculation: Jack showed that max
+theoretical throughput is 50, but we need a safety buffer. Standard deviation was ~6%.
+50 * 0.94 = 47 requests/min.
+DECISION: We are setting the hard rate limit to 47 requests/minute in the config. Action Item:
+Jack to push the config change today. Note: Do not change this number even if it looks weird.
+We risk downtime if we go higher before the DB upgrade.
+3. Office Updates The espresso machine is broken again. Please use the drip coffee maker
+until Tuesday.
+ACTION ITEMS
+Eldiiar: Email design team
+Jack: Update rate limiter to 47
+Karan: Fix the broken unit test in the payment module
+
+Database Architecture.pdf
+RFC: Database Interaction Layer Date: May 20, 2024 Owner: Jack
+1. Problem We need to decide on the data access pattern for the core API. The choice is
+between a full ORM (SQLAlchemy/Prisma) or Raw SQL (asyncpg).
+2. Constraints
+● We are using Postgres.
+● We rely heavily on JSONB columns for the "Custom Fields" feature.
+● Performance is critical for the "Bulk Import" feature.
+3. Benchmarking I ran a script inserting 10k rows (see /scripts/bench_db.py).
+● SQLAlchemy ORM: 4.2s
+● Raw SQL (Asyncpg): 1.1s
+4. Discussion Karan: "I hate debugging ORM magic. When it breaks, you don't know why."
+Eldiiar: "As long as the API is fast, I don't care." Jack: "The JSONB queries in
+SQLAlchemy are verbose and hard to read. Raw SQL is cleaner for Postgres specific
+features."
+5. Vote Raw SQL: 3 votes (Jack, Karan, Eldiiar) ORM: 0 votes Abstain: 1 (Yazdan)
+6. Conclusion We will use Raw SQL. Note for onboarding: This makes the learning curve
+steeper. New hires need to know SQL. Please comment complex queries heavily.
+
+ADR-014 Authentication Strategy.pdf
+Title: ADR 014 - Authentication Provider Strategy Status: ACCEPTED Author: Jack Date: Feb
+02, 2024
+CONTEXT We need to finalize how we handle user authentication before the beta launch. The
+initial plan was to use a third-party provider like Auth0 or Clerk to save development time.
+However, our sales conversation with Acme Corp (potential enterprise design partner) has
+introduced new constraints.
+1. They require SAML 2.0.
+2. They require custom LDAP integration for their on-premise legacy servers.
+OPTIONS
+Option A: Auth0 Enterprise
+● Pros: standard implementation, high security.
+● Cons: LDAP support is gatekept behind the "Enterprise" tier.
+● Cost: Sales rep quoted us ~$15,000/month minimum commitment. This burns 20% of
+our monthly runway.
+Option B: Self-Hosted / Custom Build
+● Pros: Free (software-wise), full control.
+● Cons: We have to maintain it. Security risk if we mess up.
+● Cost: Estimated $2,000/month in server costs + maintenance time.
+DECISION We will build our own authentication system (Option B). We cannot afford the
+$15k/mo contract at this stage.
+IMPLEMENTATION DETAILS
+● Karan will lead the backend implementation.
+● We will use standard libraries for JWT handling.
+● Security audit required before launch.
+CONSEQUENCES
+● We are responsible for all auth security patches.
+● Onboarding timeline extended by 2 weeks to accommodate this build.
