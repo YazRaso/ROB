@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import SourceStatus from "../../components/SourceStatus";
-import { API, DataEvent, EventSource as DataSource } from "../../lib/api";
+import { API, DataEvent} from "../../lib/api";
 
 export default function MemoryPage() {
   const [status, setStatus] = useState<any>(null);
