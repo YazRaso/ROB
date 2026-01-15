@@ -269,14 +269,6 @@ Link: {metadata.get('webViewLink', 'N/A')}
                 )
             print(f"Document saved to database: {file_id}")
 
-            # Log activity for dashboard
-            db.log_activity(
-                client_id=client_id,
-                source="Drive",
-                title=f"Document '{metadata['name']}' synced",
-                summary=f"Indexed {len(content.split())} words and extracted key insights",
-                color="emerald"
-            )
 
             # Emit event to notify frontend (though drive_service doesn't have emit_event imported, server calls it)
             # Actually, we should probably emit here too if this runs in a background task
