@@ -3,37 +3,45 @@ import * as vscode from "vscode";
 
 export interface ChatMessage {
   role: "user" | "assistant";
-  content: string;
-  timestamp: number;
-  sources?: SourceFile[];
-  context?: FileContext;
+    content: string;
+    timestamp: number;
+    sources?: SourceFile[];
+    context?: FileContext;
 }
 
 export interface SourceFile {
-  path: string;
+    path: string;
   sourceType: "telegram" | "drive" | "git" | "unknown";
   sourceLabel: string;
-  lineStart?: number;
-  lineEnd?: number;
-  content?: string;
+    lineStart?: number;
+    lineEnd?: number;
+    content?: string;
 }
 
 export interface FileContext {
-  fileName: string;
-  filePath: string;
-  content: string;
-  lineStart?: number;
-  lineEnd?: number;
+    fileName: string;
+    filePath: string;
+    content: string;
+    lineStart?: number;
+    lineEnd?: number;
 }
 
 export class BackboardService {
-  private apiClient: AxiosInstance;
-  private clientId: string;
+  private apiClient!: AxiosInstance;
+  private clientId!: string;
 
-  constructor() {
-    const config = vscode.workspace.getConfiguration("backboard");
-    const apiUrl = config.get<string>("apiUrl", "http://localhost:8000");
-    this.clientId = config.get<string>("clientId", "vscode_user");
+    constructor() {
+    this.updateConfig();
+  }
+
+  private updateConfig() {
+    // Hardcoded Railway URL
+    const apiUrl = "https://rob-production.up.railway.app";
+    // Hardcoded client ID - always use ALEX
+    this.clientId = "ALEX";
+
+    console.log(`[BackboardService] Using API URL: ${apiUrl}`);
+    console.log(`[BackboardService] Using Client ID: ${this.clientId}`);
 
     this.apiClient = axios.create({
       baseURL: apiUrl,
@@ -49,8 +57,8 @@ export class BackboardService {
     context?: FileContext
   ): Promise<ChatMessage> {
     if (message.includes("@source")) {
-      return this.handleSourceRequest(message);
-    }
+            return this.handleSourceRequest(message);
+        }
 
     return this.queryBackend(message, context);
   }
@@ -59,6 +67,9 @@ export class BackboardService {
     message: string,
     context?: FileContext
   ): Promise<ChatMessage> {
+    // Re-read config in case it changed
+    this.updateConfig();
+    
     try {
       // Build the query with optional context
       let fullMessage = message;
@@ -70,13 +81,16 @@ export class BackboardService {
         fullMessage = contextInfo + message;
       }
 
+      const requestUrl = `${this.apiClient.defaults.baseURL}/messages/query`;
+      console.log(`[BackboardService] Making request to: ${requestUrl}`);
+      console.log(`[BackboardService] Client ID: ${this.clientId}`);
+
       // Call the backend /messages/query endpoint which returns (response, sources)
-      const response = await this.apiClient.post("/messages/query", null, {
-        params: {
-          client_id: this.clientId,
-          content: fullMessage,
-        },
-      });
+      // Using query parameters as the backend expects
+      const response = await this.apiClient.post(
+        `/messages/query?client_id=${encodeURIComponent(this.clientId)}&content=${encodeURIComponent(fullMessage)}`,
+        null
+      );
 
       // Backend returns a tuple [response, sources]
       // Handle both array format [response, sources] and potential object format
@@ -91,7 +105,7 @@ export class BackboardService {
           response.data.content ||
           JSON.stringify(response.data);
         sources = response.data.sources || [];
-      } else {
+            } else {
         content = String(response.data || "No response received");
       }
 
@@ -113,32 +127,44 @@ export class BackboardService {
       };
     } catch (error: any) {
       console.error("Backend query failed:", error);
+      console.error(`[BackboardService] Error details:`, {
+        message: error.message,
+        code: error.code,
+        response: error.response?.data,
+        status: error.response?.status,
+        url: error.config?.url,
+        baseURL: this.apiClient.defaults.baseURL,
+      });
 
       // Return a helpful error message
-      const errorMessage =
-        error.response?.status === 404
-          ? "Client not found. Please check your configuration in VS Code settings."
-          : `Failed to connect to the backend. Make sure the server is running.\n\nError: ${error.message}`;
+      let errorMessage = "";
+      if (error.code === "ECONNREFUSED") {
+        errorMessage = `Cannot connect to backend at ${this.apiClient.defaults.baseURL}.\n\nPlease check:\n1. Your Railway server is running\n2. Settings → "backboard.apiUrl" is set correctly\n3. The URL doesn't have a trailing slash\n\nCurrent URL: ${this.apiClient.defaults.baseURL}`;
+      } else if (error.response?.status === 404) {
+        errorMessage = "Client not found. Please check your configuration in VS Code settings.";
+        } else {
+        errorMessage = `Failed to connect to the backend.\n\nError: ${error.message}\n\nURL: ${this.apiClient.defaults.baseURL}`;
+        }
 
-      return {
+        return {
         role: "assistant",
         content: errorMessage,
         timestamp: Date.now(),
       };
     }
-  }
+    }
 
-  private async handleSourceRequest(message: string): Promise<ChatMessage> {
+    private async handleSourceRequest(message: string): Promise<ChatMessage> {
     // Strip @source from the message and query the backend
     const cleanedMessage = message.replace(/@source/gi, "").trim();
 
     // If there's no actual query after removing @source, ask for clarification
     if (!cleanedMessage) {
-      return {
+        return {
         role: "assistant",
         content:
           "Please specify what you'd like to find sources for. For example: `@source how does authentication work?`",
-        timestamp: Date.now(),
+            timestamp: Date.now(),
       };
     }
 
@@ -162,7 +188,7 @@ export class BackboardService {
       const dateMatch = source.match(/\[(\w+\s+\d+),\s*(\d+:\d+)\]/);
       const dateLabel = dateMatch ? `${dateMatch[1]} at ${dateMatch[2]}` : "";
       
-      return {
+                return {
         path: "telegram.txt",
         sourceType: "telegram",
         sourceLabel: dateLabel ? `💬 Telegram Chat - ${dateLabel}` : "💬 Telegram Chat History",
@@ -183,8 +209,8 @@ export class BackboardService {
       const commitLabel = commitMatch 
         ? `${commitMatch[1].substring(0, 7)} by ${commitMatch[2]}`
         : "";
-      
-      return {
+
+            return {
         path: "git.txt",
         sourceType: "git",
         sourceLabel: commitLabel ? `📝 Git Commit - ${commitLabel}` : "📝 Git Repository History",
@@ -225,9 +251,9 @@ export class BackboardService {
         docTitle = "Meeting Notes";
       } else if (lowerSource.includes("memo")) {
         docTitle = "Team Memo";
-      }
-      
-      return {
+            }
+
+            return {
         path: "drive.txt",
         sourceType: "drive",
         sourceLabel: docTitle ? `📄 Google Drive - ${docTitle}` : "📄 Google Drive Document",
@@ -236,21 +262,21 @@ export class BackboardService {
     }
     
     // Default: unknown source
-    return {
+                return {
       path: "memory",
       sourceType: "unknown",
       sourceLabel: "📎 Retrieved Context",
       content: source,
     };
-  }
+    }
 
-  async checkConnection(): Promise<boolean> {
-    try {
+    async checkConnection(): Promise<boolean> {
+        try {
       const response = await this.apiClient.get("/");
       return response.data.status === "ok";
-    } catch (error) {
+        } catch (error) {
       console.error("Connection check failed:", error);
-      return false;
+            return false;
+        }
     }
-  }
 }

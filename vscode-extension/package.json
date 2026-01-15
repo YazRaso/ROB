@@ -70,12 +70,12 @@
       "properties": {
         "backboard.apiUrl": {
           "type": "string",
-          "default": "http://localhost:8000",
-          "description": "Backboard API server URL (use http://localhost:8000 for local testing)"
+          "default": "https://rob-production.up.railway.app",
+          "description": "Backboard API server URL (use https://rob-production.up.railway.app for production)"
         },
         "backboard.clientId": {
           "type": "string",
-          "default": "vscode_user",
+          "default": "ALEX",
           "description": "Your unique client ID"
         },
         "backboard.enableSourceLinks": {
