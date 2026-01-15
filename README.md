@@ -4,17 +4,40 @@ An intelligent onboarding assistant that integrates with Google Drive, Telegram,
 
 ## Features
 
-- 🔄 **Google Drive Integration**: Automatically monitors Google Drive documents for changes and indexes them
-- 🤖 **Backboard AI**: Stores and retrieves context from meeting notes, documentation, and code
-- 📱 **Telegram Bot**: (Coming soon) Chat interface for querying the assistant
-- 💾 **Smart Caching**: Tracks document changes using MD5 hashing to avoid redundant processing
-- 🔒 **Secure**: API keys encrypted using Fernet symmetric encryption
-  
-<img width="951" height="1162" alt="Screenshot 2026-01-15 at 1 21 42 PM" src="https://github.com/user-attachments/assets/43ac4d5c-8a9d-45d0-bddf-c76c7a9d9b87" />
-<img width="951" height="1162" alt="Screenshot 2026-01-15 at 1 21 42 PM" src="https://github.com/user-attachments/assets/b71ab6ae-d445-4b7b-b5a6-000a6330f6d2" />
+- **Google Drive Integration**: Automatically monitors Google Drive documents for changes and indexes them
+- **Backboard AI**: Stores and retrieves context from meeting notes, documentation, and code
+- **Telegram Bot**: (Coming soon) Chat interface for querying the assistant
+- **Smart Caching**: Tracks document changes using MD5 hashing to avoid redundant processing
+- **Secure**: API keys encrypted using Fernet symmetric encryption
+
+## How does the app work?
+
+The application workflow starts by connecting your database, where your team stores a collection of meeting notes, linking the chat platform your team uses, and connecting the repository where the code is hosted or deployed.
+
 <img width="2438" height="1187" alt="Screenshot 2026-01-15 at 1 18 38 PM" src="https://github.com/user-attachments/assets/47b7f919-554c-4cfa-b919-8407e96a797d" />
-<img width="2439" height="1190" alt="Screenshot 2026-01-15 at 1 18 57 PM" src="https://github.com/user-attachments/assets/f1901371-1789-4ae8-9244-13bfc11457d1" />
+<br>
+In our application, we use Drive for documents, Telegram for team communication, and a GitHub repository for the codebase.
+
 <img width="2439" height="1185" alt="Screenshot 2026-01-15 at 1 39 18 PM" src="https://github.com/user-attachments/assets/f66b457c-b724-4e41-807b-adbbd77bdad9" />
+
+Once these connections are set up, you are all ready to go. The rest is handled by our application and the Backboard API.
+
+At this point, all connections are in place. The system continuously polls for changes and keeps the shared memory up to date.
+
+<br>
+On the user side, users can chat through the window below and ask questions about the codebase or have general conversations.
+
+<img width="951" height="1162" alt="Screenshot 2026-01-15 at 1 21 42 PM" src="https://github.com/user-attachments/assets/43ac4d5c-8a9d-45d0-bddf-c76c7a9d9b87" />
+
+<br>
+
+<img width="951" height="1162" alt="Screenshot 2026-01-15 at 1 21 42 PM" src="https://github.com/user-attachments/assets/b71ab6ae-d445-4b7b-b5a6-000a6330f6d2" />
+<br>
+<br>
+
+You can also track for live updates on the website:
+
+<img width="2439" height="1190" alt="Screenshot 2026-01-15 at 1 18 57 PM" src="https://github.com/user-attachments/assets/f1901371-1789-4ae8-9244-13bfc11457d1" />
 
 ## Quick Start
 
